@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="apps/menubar/Resources/OpenSurgeAppIcon.png" width="96" height="96" alt="OpenSurge for Mac App 图标">
   <h1>OpenSurge for Mac</h1>
   <p><strong>把 Mac 变成可按设备分流的 Surge 风格全屋透明代理网关——既可作为旁路由让指定设备手动接入，也支持 DHCP/DNS 自动接管</strong></p>
   <p>

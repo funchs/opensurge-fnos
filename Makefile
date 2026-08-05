@@ -1,5 +1,5 @@
 .PHONY: test build doctor status policy-control-test
-.PHONY: web-install web-build web-test control-build control-run menubar-build menubar-test gui-build gui-test gui-installer gui-notarize
+.PHONY: web-install web-build web-test control-build control-run
 .PHONY: lab-install lab-uninstall-root lab-check lab-up lab-status lab-test
 .PHONY: lab-test-tun lab-test-tun-imported-profile lab-test-tun-imported-egress lab-test-tun-local-routing lab-test-tun-device-policy lab-down lab-destroy
 .PHONY: real-device-start-off real-device-start-tun real-device-start-tun-proxy
@@ -34,24 +34,6 @@ control-build: web-build
 
 control-run: control-build
 	./bin/opensurge-control --config examples/config.example.yaml
-
-menubar-build:
-	./scripts/build-menubar-app.sh
-
-menubar-test:
-	./scripts/check-menubar.sh
-
-gui-build: control-build menubar-build
-
-gui-test: test web-test menubar-test
-	./scripts/check-gui-packaging.sh
-
-gui-installer:
-	./scripts/build-gui-installer.sh
-
-gui-notarize:
-	@test -n "$(PKG)" || (echo "usage: make gui-notarize PKG=/path/to/OpenSurge.pkg" >&2; exit 1)
-	./scripts/notarize-gui-installer.sh "$(PKG)"
 
 doctor:
 	go run ./cmd/omg doctor --config examples/config.example.yaml

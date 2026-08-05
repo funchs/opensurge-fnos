@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="apps/menubar/Resources/OpenSurgeAppIcon.png" width="96" height="96" alt="OpenSurge for Mac App Icon">
   <h1>OpenSurge for Mac</h1>
   <p><strong>Turn a Mac into a Surge-style whole-home transparent gateway with per-device routing—use it in same-LAN bypass-router mode, or take over DHCP/DNS automatically.</strong></p>
   <p>
