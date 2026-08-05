@@ -8,8 +8,6 @@ import (
 	"open-mihomo-gateway/internal/process"
 )
 
-const keyIPForwarding = "net.inet.ip.forwarding"
-
 type Manager struct{}
 
 func New() Manager {

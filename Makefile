@@ -1,5 +1,5 @@
 .PHONY: test build doctor status policy-control-test
-.PHONY: web-install web-build web-test control-build control-run menubar-build menubar-test gui-build gui-test gui-installer gui-notarize
+.PHONY: web-install web-build web-test control-build control-run docker-build docker-push
 .PHONY: lab-install lab-uninstall-root lab-check lab-up lab-status lab-test
 .PHONY: lab-test-tun lab-test-tun-imported-profile lab-test-tun-imported-egress lab-test-tun-local-routing lab-test-tun-device-policy lab-down lab-destroy
 .PHONY: real-device-start-off real-device-start-tun real-device-start-tun-proxy
@@ -35,23 +35,15 @@ control-build: web-build
 control-run: control-build
 	./bin/opensurge-control --config examples/config.example.yaml
 
-menubar-build:
-	./scripts/build-menubar-app.sh
+# 飞牛 NAS 是 amd64（N100 / N305 等），固定出这一个架构。
+# 换 registry：make docker-push IMAGE=ghcr.io/你的账号/opensurge-fnos:v0.1.0
+IMAGE ?= ghcr.io/OWNER/opensurge-fnos:latest
 
-menubar-test:
-	./scripts/check-menubar.sh
+docker-build:
+	docker build --platform linux/amd64 -t $(IMAGE) .
 
-gui-build: control-build menubar-build
-
-gui-test: test web-test menubar-test
-	./scripts/check-gui-packaging.sh
-
-gui-installer:
-	./scripts/build-gui-installer.sh
-
-gui-notarize:
-	@test -n "$(PKG)" || (echo "usage: make gui-notarize PKG=/path/to/OpenSurge.pkg" >&2; exit 1)
-	./scripts/notarize-gui-installer.sh "$(PKG)"
+docker-push: docker-build
+	docker push $(IMAGE)
 
 doctor:
 	go run ./cmd/omg doctor --config examples/config.example.yaml
