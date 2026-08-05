@@ -1,0 +1,21 @@
+services:
+  opensurge:
+    image: ${OPENSURGE_IMAGE:-ghcr.io/OWNER/opensurge-fnos:latest}
+    container_name: opensurge
+    # 旁路由必须走宿主网络：要看得见真实网卡、要能建 TUN、nftables 规则要作用在宿主上。
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      # 只为把 /proc/sys remount 成可写——Docker 默认挂只读，网关要写
+      # net.ipv4.ip_forward。host 网络下不能用 sysctls:，privileged 又太宽。
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./config:/etc/opensurge
+      - ./state:/var/lib/opensurge
+    environment:
+      # 局域网内直接开 http://<NAS-IP>:61767，控制面无密码，别暴露到公网。
+      OPENSURGE_ADDR: 0.0.0.0:61767
+    restart: unless-stopped
