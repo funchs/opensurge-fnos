@@ -8,6 +8,16 @@ export class RequestError extends Error {
 
 export const authenticationRequiredEvent = 'opensurge:authentication-required'
 
+// Polyfill for crypto.randomUUID (Safari < 15.4, Chrome < 92)
+function randomUUID(): string {
+  if (crypto.randomUUID) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: 'same-origin',
@@ -28,7 +38,7 @@ export const api = {
   config: () => request<ControlConfig>('/api/v1/config'),
   networkInterfaces: () => request<NetworkInterfacesResponse>('/api/v1/network/interfaces'),
   saveConfig: (config: ControlConfig) => request<ControlConfig>('/api/v1/config', { method: 'PUT', headers: { 'If-Match': `"${config.revision}"` }, body: JSON.stringify(config) }),
-  gateway: (action: 'start' | 'stop' | 'reload' | 'restart-mihomo') => request<Operation>(`/api/v1/gateway/${action}`, { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() } }),
+  gateway: (action: 'start' | 'stop' | 'reload' | 'restart-mihomo') => request<Operation>(`/api/v1/gateway/${action}`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() } }),
   operation: (id: string) => request<Operation>(`/api/v1/operations/${encodeURIComponent(id)}`),
   gatewayPlan: (routerDHCPDisabled = false) => request<GatewayPlan>('/api/v1/gateway/plan', { method: 'POST', body: JSON.stringify({ router_dhcp_disabled: routerDHCPDisabled }) }),
   recovery: (stage: string) => request('/api/v1/recovery', { method: 'POST', body: JSON.stringify({ stage }) }),
