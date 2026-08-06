@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="apps/menubar/Resources/OpenSurgeAppIcon.png" width="96" height="96" alt="OpenSurge for Mac App Icon">
   <h1>OpenSurge for Mac</h1>
   <p><strong>Turn a Mac into a Surge-style whole-home transparent gateway with per-device routing—use it in same-LAN bypass-router mode, or take over DHCP/DNS automatically.</strong></p>
   <p>
@@ -11,6 +10,27 @@
   <p>
     <a href="README.md">简体中文</a> · <strong>English</strong>
   </p>
+</div>
+
+> ## ⚠️ This is the fnOS (FeiNiu NAS) port
+>
+> This branch ports the OpenSurge Go control plane to **fnOS (Debian 12 based)**,
+> running as a **bypass-router gateway** and shipped as a **Docker image**
+> (`linux/amd64`).
+>
+> - **To deploy** → [fnOS deployment guide](docs/fnos-port/DEPLOY.md)
+> - **Port design** → [design document](docs/fnos-port/DESIGN.md)
+>
+> Everything below is upstream's macOS documentation. **Anything about the pkg
+> installer, menu bar app, launchd, pf, or networksetup does not apply here** —
+> those artifacts were deleted. The gateway logic, per-device policy, and Web GUI
+> are shared.
+>
+> Behavioral differences from the macOS build: interface configuration belongs to
+> fnOS system settings (the control plane never modifies host networking), DHCP is
+> not taken over, and the firewall is nftables rather than pf.
+
+<div align="center">
   <p>
     <a href="https://github.com/YTwsy/OpenSurge-for-Mac/releases">Download</a> ·
     <a href="docs/app-user-guide.md">App guide</a> ·
@@ -149,8 +169,11 @@ GUI, and a read-only native SwiftUI menu bar launcher. For a development build:
 make web-install
 make control-build
 ./bin/opensurge-control --config examples/config.example.yaml
-make menubar-build
 ```
+
+> The fnOS port has no menu bar app (`make menubar-build` was removed along with
+> the Swift sources). Delivery is a Docker image: `make docker-push IMAGE=...`.
+> See the [fnOS deployment guide](docs/fnos-port/DEPLOY.md).
 
 The control service listens only on `127.0.0.1` and prints a one-time Web GUI
 bootstrap link. The menu bar app shows status and recovery warnings and opens
@@ -170,6 +193,12 @@ check. Neither result is presented as proof of downstream gateway rules or a
 device's DHCP/DNS/TUN path.
 See the [GUI architecture notes](docs/gui-architecture.zh-CN.md) for the current
 security and packaging boundary.
+
+> **The following section describes upstream's macOS installer flow and does not
+> apply to the fnOS port.** The macOS packaging scripts, launchd plists, pkg
+> scripts, and signing/notarization pipeline were deleted from this branch, which
+> ships only a Docker image. The text is kept to minimize rebase conflicts with
+> upstream.
 
 `make gui-installer` builds a macOS package after requiring real mihomo and
 dnsmasq binaries. Developer ID signing and notarization are opt-in through the

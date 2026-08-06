@@ -1,0 +1,12 @@
+.git
+.github
+bin
+runtime
+artifacts
+output
+docs
+tests
+web/node_modules
+config
+state
+*.md
