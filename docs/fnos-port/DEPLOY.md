@@ -12,15 +12,10 @@ ghcr.io/funchs/opensurge-fnos:latest
 ghcr.io/funchs/opensurge-fnos:sha-<git 短 sha>    # 精确定位某次构建，推荐生产用这个
 ```
 
-package **默认是 private**，NAS 上拉之前要先登录：
+package 已设为 **public**，NAS 上直接 `docker compose pull` 即可，**不需要登录**。
 
-```bash
-# NAS 上。token 需要 read:packages
-echo "$GHCR_TOKEN" | docker login ghcr.io -u funchs --password-stdin
-```
-
-（改成 public 就免登录，代价是镜像任何人可下载。GitHub → 你的头像 → Packages →
-opensurge-fnos → Package settings → Change visibility。）
+镜像里不含任何私密信息：只打包了一份占位示例配置（`/usr/share/opensurge/`），
+真实配置和 `control-token` 都在运行时挂载的卷里。
 
 ### 重新构建并推送
 
