@@ -130,7 +130,7 @@ func SetLocalRouting(ctx context.Context, cfg config.Config, mode, globalPolicy 
 	tcpGroup, tcpOK := proxyGroupByName(groups, LocalRoutingTCPGroup)
 	udpGroup, udpOK := proxyGroupByName(groups, LocalRoutingUDPGroup)
 	if !tcpOK || !udpOK {
-		return LocalRoutingSnapshot{}, fmt.Errorf("local Mac routing groups are not available; reload or restart the gateway with the current OpenSurge configuration")
+		return LocalRoutingSnapshot{}, fmt.Errorf("local routing groups are not available; reload or restart the gateway with the current OpenSurge configuration")
 	}
 	globalGroup, globalOK := proxyGroupByName(groups, LocalRoutingGlobalGroup)
 
@@ -140,7 +140,7 @@ func SetLocalRouting(ctx context.Context, cfg config.Config, mode, globalPolicy 
 	}
 	if selectedGlobal != "" {
 		if !globalOK || !proxyGroupHasOption(globalGroup, selectedGlobal) {
-			return LocalRoutingSnapshot{}, fmt.Errorf("global policy %q is not available for local Mac routing", selectedGlobal)
+			return LocalRoutingSnapshot{}, fmt.Errorf("global policy %q is not available for local routing", selectedGlobal)
 		}
 	}
 	if mode == LocalRoutingModeGlobal && (!globalOK || selectedGlobal == "") {
@@ -160,7 +160,7 @@ func SetLocalRouting(ctx context.Context, cfg config.Config, mode, globalPolicy 
 		}
 	}
 	if !proxyGroupHasOption(tcpGroup, tcpTarget) || !proxyGroupHasOption(udpGroup, udpTarget) {
-		return LocalRoutingSnapshot{}, fmt.Errorf("generated local Mac routing groups do not support the requested mode")
+		return LocalRoutingSnapshot{}, fmt.Errorf("generated local routing groups do not support the requested mode")
 	}
 
 	type selection struct {
@@ -203,7 +203,7 @@ func SetLocalRouting(ctx context.Context, cfg config.Config, mode, globalPolicy 
 	snapshot := localRoutingSnapshot(cfg, updated)
 	if !snapshot.Consistent || snapshot.Mode != mode {
 		rollback()
-		return LocalRoutingSnapshot{}, fmt.Errorf("mihomo did not apply local Mac routing mode %q consistently", mode)
+		return LocalRoutingSnapshot{}, fmt.Errorf("mihomo did not apply local routing mode %q consistently", mode)
 	}
 	return snapshot, nil
 }
@@ -246,7 +246,7 @@ func localRoutingSnapshot(cfg config.Config, groups []ProxyGroup) LocalRoutingSn
 		snapshot.Mode = LocalRoutingModeGlobal
 		if udp.Selected == "REJECT" {
 			snapshot.UDPBehavior = "reject"
-			snapshot.Warning = "当前全局出口不支持 UDP；Mac 本机 UDP 将被拒绝，避免静默落回网关规则或直连。"
+			snapshot.Warning = "当前全局出口不支持 UDP；本机 UDP 将被拒绝，避免静默落回网关规则或直连。"
 		} else {
 			snapshot.UDPBehavior = "proxy"
 		}

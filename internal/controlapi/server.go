@@ -621,7 +621,7 @@ func (s *Server) handleGatewayPlan(w http.ResponseWriter, r *http.Request) {
 			plan.Blockers = append(plan.Blockers, "same-LAN DHCP takeover requires one shared interface")
 		}
 		if snapshot.IPv4 != cfg.Gateway.LANIP {
-			plan.Blockers = append(plan.Blockers, fmt.Sprintf("Mac IPv4 %s differs from configured gateway.lan_ip %s", snapshot.IPv4, cfg.Gateway.LANIP))
+			plan.Blockers = append(plan.Blockers, fmt.Sprintf("NAS IPv4 %s differs from configured gateway.lan_ip %s", snapshot.IPv4, cfg.Gateway.LANIP))
 		}
 		if snapshot.IPv6Default {
 			plan.Warnings = append(plan.Warnings, "IPv6 default route is active; per-device IPv4 policy can be bypassed")
@@ -880,7 +880,7 @@ func (s *Server) handleAbandonTakeover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if state.Stage != RecoveryMacStatic && state.Stage != RecoveryRouterDHCPDisabledConfirmed {
-		writeError(w, http.StatusConflict, "recovery_precondition", "takeover can be abandoned only after the Mac uses fixed IPv4 and before the gateway becomes active")
+		writeError(w, http.StatusConflict, "recovery_precondition", "takeover can be abandoned only after the NAS uses fixed IPv4 and before the gateway becomes active")
 		return
 	}
 	if state.NetworkSnapshot == nil {
@@ -914,10 +914,10 @@ func (s *Server) handleAbandonTakeover(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadGateway, "restore_dhcp_failed", err.Error())
 			return
 		}
-		appendRecoveryNote(&state, "DHCP takeover abandoned; a DHCP server answered and the Mac was restored to automatic DHCP")
+		appendRecoveryNote(&state, "DHCP takeover abandoned; a DHCP server answered and the NAS was restored to automatic DHCP")
 		state.Stage, state.Required = RecoveryComplete, false
 	} else {
-		appendRecoveryNote(&state, "DHCP takeover abandoned while no DHCP server answered; the Mac remains on fixed IPv4 and router DHCP availability was not verified")
+		appendRecoveryNote(&state, "DHCP takeover abandoned while no DHCP server answered; the NAS remains on fixed IPv4 and router DHCP availability was not verified")
 		state.Stage, state.Required = RecoveryCompleteStatic, false
 	}
 	if err := s.store.SaveRecovery(state); err != nil {
@@ -1073,7 +1073,7 @@ func (s *Server) handleRecoveryPrepare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := macosnetwork.ValidateManual(manualConfigForSnapshot(cfg, snapshot)); err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "static_config_invalid", fmt.Sprintf("configured Mac LAN IPv4 %s is incompatible with router %s and subnet mask %s: %v", cfg.Gateway.LANIP, snapshot.Router, snapshot.SubnetMask, err))
+		writeError(w, http.StatusUnprocessableEntity, "static_config_invalid", fmt.Sprintf("configured NAS LAN IPv4 %s is incompatible with router %s and subnet mask %s: %v", cfg.Gateway.LANIP, snapshot.Router, snapshot.SubnetMask, err))
 		return
 	}
 	state := RecoveryState{SchemaVersion: SchemaVersion, Stage: RecoveryPrepared, Topology: cfg.Gateway.Mode, NetworkService: snapshot.NetworkService, OriginalIPv4: snapshot.IPv4, OriginalRouter: snapshot.Router, Required: true, NetworkSnapshot: &snapshot}
@@ -1111,7 +1111,7 @@ func (s *Server) handleApplyStatic(w http.ResponseWriter, r *http.Request) {
 		err = macosnetwork.VerifyManual(current, manual)
 	}
 	if err != nil {
-		message := fmt.Sprintf("Mac 仍未使用预期的固定 IPv4 %s。请打开“系统设置 → 网络 → %s → 详细信息 → TCP/IP”，确认“配置 IPv4”为“手动”且 IPv4 地址正确，然后重试。检查结果：%v", manual.IPv4, manual.NetworkService, err)
+		message := fmt.Sprintf("本机仍未使用预期的固定 IPv4 %s。请在系统网络设置中把接口 %s 的 IPv4 配置为手动并确认地址正确，然后重试。检查结果：%v", manual.IPv4, manual.NetworkService, err)
 		writeError(w, http.StatusBadGateway, "static_ipv4_not_applied", message)
 		return
 	}
@@ -1139,7 +1139,7 @@ func (s *Server) handleDHCPProbe(w http.ResponseWriter, r *http.Request) {
 	}
 	state, _ := s.store.Recovery()
 	if state.Stage != RecoveryMacStatic {
-		writeError(w, http.StatusConflict, "recovery_precondition", "Mac static IPv4 must be applied before probing for router DHCP")
+		writeError(w, http.StatusConflict, "recovery_precondition", "NAS static IPv4 must be applied before probing for router DHCP")
 		return
 	}
 	servers, err := s.networkRunner.ProbeDHCP(r.Context(), s.configPath, cfg.Gateway.Interface, 3*time.Second)
@@ -1201,7 +1201,7 @@ func (s *Server) handleManualRecoveryFinish(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadGateway, "restore_dhcp_failed", err.Error())
 		return
 	}
-	appendRecoveryNote(&state, "router DHCP manually confirmed; OFFER evidence skipped; Mac restored to automatic DHCP")
+	appendRecoveryNote(&state, "router DHCP manually confirmed; OFFER evidence skipped; NAS restored to automatic DHCP")
 	state.Stage, state.Required = RecoveryComplete, false
 	if err := s.store.SaveRecovery(state); err != nil {
 		writeError(w, http.StatusInternalServerError, "recovery_write_failed", err.Error())
@@ -1217,15 +1217,15 @@ func (s *Server) handleKeepStaticFinish(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if !request.KeepStaticConfirmed {
-		writeError(w, http.StatusUnprocessableEntity, "keep_static_confirmation_required", "confirm that the Mac will keep its static IPv4 configuration")
+		writeError(w, http.StatusUnprocessableEntity, "keep_static_confirmation_required", "confirm that the NAS will keep its static IPv4 configuration")
 		return
 	}
 	state, _ := s.store.Recovery()
 	if (state.Stage != RecoveryGatewayStopped && state.Stage != RecoveryRouterDHCPRestored) || state.NetworkSnapshot == nil {
-		writeError(w, http.StatusConflict, "recovery_precondition", "stop OpenSurge before finishing the flow with a static Mac IPv4")
+		writeError(w, http.StatusConflict, "recovery_precondition", "stop OpenSurge before finishing the flow with a static NAS IPv4")
 		return
 	}
-	appendRecoveryNote(&state, "post-stop router DHCP verification and Mac automatic DHCP restore explicitly skipped by operator; Mac kept static IPv4")
+	appendRecoveryNote(&state, "post-stop router DHCP verification and NAS automatic DHCP restore explicitly skipped by operator; NAS kept static IPv4")
 	state.Stage, state.Required = RecoveryCompleteStatic, false
 	if err := s.store.SaveRecovery(state); err != nil {
 		writeError(w, http.StatusInternalServerError, "recovery_write_failed", err.Error())
@@ -1244,7 +1244,7 @@ func appendRecoveryNote(state *RecoveryState, note string) {
 func (s *Server) handleRestoreDHCP(w http.ResponseWriter, r *http.Request) {
 	state, _ := s.store.Recovery()
 	if state.Stage != RecoveryRouterDHCPRestored || state.NetworkSnapshot == nil {
-		writeError(w, http.StatusConflict, "recovery_precondition", "verify restored router DHCP before restoring the Mac")
+		writeError(w, http.StatusConflict, "recovery_precondition", "verify restored router DHCP before restoring the NAS")
 		return
 	}
 	if err := s.networkRunner.SetDHCP(r.Context(), s.configPath, state.NetworkSnapshot.NetworkService); err != nil {
@@ -1561,7 +1561,7 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 			observationErrors = append(observationErrors, "mihomo connections: "+connectionErr.Error())
 		}
 		if neighborErr != nil {
-			observationErrors = append(observationErrors, "macOS neighbor table: "+neighborErr.Error())
+			observationErrors = append(observationErrors, "neighbor table: "+neighborErr.Error())
 		}
 		response.ObservationError = strings.Join(observationErrors, "; ")
 	}
@@ -1632,7 +1632,7 @@ func (s *Server) handlePolicySelection(w http.ResponseWriter, r *http.Request) {
 	}
 	group := r.PathValue("group")
 	if mihomo.IsLocalRoutingGroup(group) {
-		writeError(w, http.StatusUnprocessableEntity, "reserved_policy_group", "use the local Mac routing endpoint to change this internal policy group")
+		writeError(w, http.StatusUnprocessableEntity, "reserved_policy_group", "use the local routing endpoint to change this internal policy group")
 		return
 	}
 	groups, err := mihomo.FetchProxyGroups(r.Context(), cfg)
@@ -1772,7 +1772,7 @@ func (s *Server) handleProviderRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("name")
 	if mihomo.IsLocalRoutingGroup(name) {
-		writeError(w, http.StatusUnprocessableEntity, "reserved_provider", "OpenSurge local Mac routing groups are internal and cannot be refreshed")
+		writeError(w, http.StatusUnprocessableEntity, "reserved_provider", "OpenSurge local routing groups are internal and cannot be refreshed")
 		return
 	}
 	provider, err := mihomo.UpdateProxyProvider(r.Context(), cfg, name)

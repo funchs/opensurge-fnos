@@ -310,7 +310,7 @@ func TestRecoveryTransitionsPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"同一 LAN DHCP 恢复卡", "原始 IPv4：192.168.1.20", "原始路由器：192.168.1.1", "原始 DNS：192.168.1.1", "恢复自动获取的路径必须先确认路由器 DHCP 已恢复并通过 OFFER 探测", "跳过 OFFER 探测并恢复 Mac 自动 DHCP", "保留静态 IP 并结束"} {
+	for _, want := range []string{"同一 LAN DHCP 恢复卡", "原始 IPv4：192.168.1.20", "原始路由器：192.168.1.1", "原始 DNS：192.168.1.1", "恢复自动获取的路径必须先确认路由器 DHCP 已恢复并通过 OFFER 探测", "跳过 OFFER 探测并恢复 NAS 自动 DHCP", "保留静态 IP 并结束"} {
 		if !strings.Contains(string(card), want) {
 			t.Fatalf("recovery card missing %q:\n%s", want, card)
 		}
@@ -539,7 +539,7 @@ func TestApplyStaticWarnsWhenMacStillUsesDHCP(t *testing.T) {
 	}
 
 	response := performAuthorized(server, http.MethodPost, "/api/v1/network/apply-static", nil)
-	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "static_ipv4_not_applied") || !strings.Contains(response.Body.String(), "Mac 仍未使用预期的固定 IPv4 192.168.1.20") {
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "static_ipv4_not_applied") || !strings.Contains(response.Body.String(), "本机仍未使用预期的固定 IPv4 192.168.1.20") {
 		t.Fatalf("apply static status=%d body=%s", response.Code, response.Body.String())
 	}
 	if network.manual.IPv4 != "192.168.1.20" {
@@ -618,7 +618,7 @@ func TestRecoveryCanFinishWithStaticIPv4WithoutDHCPActions(t *testing.T) {
 			if state.Stage != RecoveryCompleteStatic || state.Required || network.dhcpRestored || network.probeCount != 0 {
 				t.Fatalf("keep-static state=%#v network=%#v", state, network)
 			}
-			if !strings.Contains(state.RecoveryNotes, "Mac kept static IPv4") || !strings.Contains(state.RecoveryNotes, "gateway stopped") {
+			if !strings.Contains(state.RecoveryNotes, "NAS kept static IPv4") || !strings.Contains(state.RecoveryNotes, "gateway stopped") {
 				t.Fatalf("keep-static notes=%q", state.RecoveryNotes)
 			}
 		})
@@ -639,7 +639,7 @@ func TestRecoveryPrepareRejectsGatewayIPv4OutsideRouterSubnet(t *testing.T) {
 	}
 
 	response := performAuthorized(server, http.MethodPost, "/api/v1/recovery/prepare", []byte(`{"network_service":"Wi-Fi"}`))
-	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "configured Mac LAN IPv4 192.168.50.1") {
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "configured NAS LAN IPv4 192.168.50.1") {
 		t.Fatalf("prepare status=%d body=%s", response.Code, response.Body.String())
 	}
 	state, _ := server.store.Recovery()

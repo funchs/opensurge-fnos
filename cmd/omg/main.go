@@ -60,7 +60,7 @@ func run(args []string) int {
 	outputFormat := fs.String("format", "text", "output format: text or json")
 	policyGroup := fs.String("group", "", "mihomo policy group name")
 	policyName := fs.String("policy", "", "mihomo policy name to select")
-	localMode := fs.String("mode", "", "local Mac routing mode: rule, global, or direct")
+	localMode := fs.String("mode", "", "local NAS routing mode: rule, global, or direct")
 	deviceID := fs.String("device", "", "configured device id")
 	deviceSlot := fs.String("slot", "default", "device policy slot: default or a rule id")
 	providerName := fs.String("provider", "", "mihomo proxy provider name")
@@ -193,7 +193,7 @@ func run(args []string) int {
 		fmt.Print(formatProxyGroups(groups))
 	case "policy-select":
 		if mihomo.IsLocalRoutingGroup(*policyGroup) {
-			return writeErrorMessageExit(command, jsonOutput, 1, "policy-select: use local-routing-set to change OpenSurge local Mac routing groups")
+			return writeErrorMessageExit(command, jsonOutput, 1, "policy-select: use local-routing-set to change OpenSurge local routing groups")
 		}
 		groups, err := fetchProxyGroups(ctx, cfg)
 		if err != nil {
@@ -273,7 +273,7 @@ func run(args []string) int {
 		fmt.Print(formatProviders(providers))
 	case "provider-update":
 		if mihomo.IsLocalRoutingGroup(*providerName) {
-			return writeErrorMessageExit(command, jsonOutput, 1, "provider-update: OpenSurge local Mac routing groups are internal and cannot be refreshed")
+			return writeErrorMessageExit(command, jsonOutput, 1, "provider-update: OpenSurge local routing groups are internal and cannot be refreshed")
 		}
 		provider, err := updateProxyProvider(ctx, cfg, *providerName)
 		if err != nil {
@@ -526,7 +526,7 @@ func validatePolicySelection(groups []mihomo.ProxyGroup, groupName, selected str
 
 func formatLocalRouting(snapshot mihomo.LocalRoutingSnapshot) string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "Mac local traffic mode: %s\n", snapshot.Mode)
+	fmt.Fprintf(&out, "NAS local traffic mode: %s\n", snapshot.Mode)
 	if snapshot.GlobalGroup != nil {
 		fmt.Fprintf(&out, "Global policy: %s\n", snapshot.GlobalGroup.Selected)
 	}
