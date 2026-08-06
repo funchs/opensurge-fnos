@@ -5,20 +5,33 @@
 
 ## 一、准备镜像
 
-镜像只出 `linux/amd64`（飞牛主流的 N100 / N305 都是 x86）。
+镜像只出 `linux/amd64`（飞牛主流的 N100 / N305 都是 x86），已推到：
 
-```bash
-# 首次推送前登录 GHCR（token 在 GitHub → Settings → Developer settings →
-# Personal access tokens，classic，勾 write:packages）
-echo "$GHCR_TOKEN" | docker login ghcr.io -u funchs --password-stdin
-
-# 在开发机上构建并推送
-make docker-push                                    # → ghcr.io/funchs/opensurge-fnos:latest
-make docker-push IMAGE=ghcr.io/funchs/opensurge-fnos:v0.1.0   # 打版本号
+```
+ghcr.io/funchs/opensurge-fnos:latest
+ghcr.io/funchs/opensurge-fnos:sha-<git 短 sha>    # 精确定位某次构建，推荐生产用这个
 ```
 
-首次推送创建的 package **默认是 private**，NAS 上要能拉得先在 NAS 上
-`docker login ghcr.io`；或者去 GitHub 的 Package settings 改成 public。
+package **默认是 private**，NAS 上拉之前要先登录：
+
+```bash
+# NAS 上。token 需要 read:packages
+echo "$GHCR_TOKEN" | docker login ghcr.io -u funchs --password-stdin
+```
+
+（改成 public 就免登录，代价是镜像任何人可下载。GitHub → 你的头像 → Packages →
+opensurge-fnos → Package settings → Change visibility。）
+
+### 重新构建并推送
+
+```bash
+# 开发机上，token 需要 write:packages；用 gh CLI 最省事：
+gh auth refresh -h github.com -s write:packages
+gh auth token | docker login ghcr.io -u funchs --password-stdin
+
+make docker-push                                              # → :latest
+make docker-push IMAGE=ghcr.io/funchs/opensurge-fnos:sha-$(git rev-parse --short HEAD)
+```
 
 ## 二、NAS 上准备目录
 
