@@ -1,3 +1,5 @@
+//go:build darwin
+
 package macosnetwork
 
 import (
@@ -5,11 +7,6 @@ import (
 	"fmt"
 	"strings"
 )
-
-type RouteSelection struct {
-	Interface string `json:"interface"`
-	Gateway   string `json:"gateway,omitempty"`
-}
 
 func LookupRoute(ctx context.Context, destination string) (RouteSelection, error) {
 	output, err := runCommand(ctx, "/sbin/route", "-n", "get", destination)

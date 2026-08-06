@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="apps/menubar/Resources/OpenSurgeAppIcon.png" width="96" height="96" alt="OpenSurge for Mac App 图标">
   <h1>OpenSurge for Mac</h1>
   <p><strong>把 Mac 变成可按设备分流的 Surge 风格全屋透明代理网关——既可作为旁路由让指定设备手动接入，也支持 DHCP/DNS 自动接管</strong></p>
   <p>
@@ -11,6 +10,24 @@
   <p>
     <strong>简体中文</strong> · <a href="README.en.md">English</a>
   </p>
+</div>
+
+> ## ⚠️ 这是 fnOS（飞牛 NAS）移植分支
+>
+> 本分支把 OpenSurge 的 Go 控制面移植到 **飞牛 NAS（fnOS，Debian 12 底）**，
+> 以**旁路由网关**形态运行，交付形式是 **Docker 镜像**（`linux/amd64`）。
+>
+> - **部署看这里** → [fnOS 部署指南](docs/fnos-port/DEPLOY.md)
+> - **移植方案** → [设计文档](docs/fnos-port/DESIGN.md)
+>
+> 下面的正文是上游作者写的 macOS 版说明。**涉及 pkg 安装包、菜单栏 App、
+> launchd、pf、networksetup 的部分本分支都不适用**——那些产物已经删除。
+> 网关逻辑、按设备策略、Web GUI 则是共用的，读的时候注意区分。
+>
+> 与 macOS 版的行为差异：网卡配置由 fnOS 系统设置管（控制面不修改宿主机网络）、
+> 不接管 DHCP、防火墙走 nftables 而非 pf。
+
+<div align="center">
   <p>
     <a href="https://github.com/YTwsy/OpenSurge-for-Mac/releases">下载</a> ·
     <a href="docs/app-user-guide.zh-CN.md">App 指南</a> ·
@@ -137,8 +154,11 @@ OpenSurge 有意不内置家庭模板或第三方规则列表；策略内容由�
 make web-install
 make control-build
 ./bin/opensurge-control --config examples/config.example.yaml
-make menubar-build
 ```
+
+> fnOS 移植版没有菜单栏 App（原 `make menubar-build` 已随 Swift 代码一并删除）。
+> 交付走 Docker：`make docker-push IMAGE=...`，部署见
+> [fnOS 部署指南](docs/fnos-port/DEPLOY.md)。
 
 控制服务只监听 `127.0.0.1`，启动时会输出一次性 Web GUI 链接。菜单栏 App 显示
 状态、恢复警报并打开 Web GUI，不提供网关 start/stop 或策略切换。它区分“只退出菜单栏
@@ -150,6 +170,10 @@ Control Service；系统 launchd 托管的 root Helper 保持空闲加载，下�
 Web GUI 内置 applied 配置 + 当前 Mac 本机模式的连通性页面，并提供 Net.Coffee 的
 独立浏览器本机检测入口；两者都不会被描述成下游设备网关规则或 DHCP/DNS/TUN 路径
 已经验收。
+
+> **以下小节属于上游的 macOS 安装包流程，fnOS 移植版不适用。**
+> macOS 打包脚本、launchd plist、pkg 脚本和签名/公证流程已从本分支删除，
+> 本分支只出 Docker 镜像。保留这些文字是为了减小 rebase 上游时的冲突面。
 
 `make gui-installer` 会在取得真实 mihomo、dnsmasq 二进制后构建 macOS 安装包。
 Developer ID 签名和 notarization 必须显式提供发布凭据。GitHub 正式发布同时提供文件名中
