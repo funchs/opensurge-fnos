@@ -68,8 +68,8 @@ export function LocalRoutingCard({
   const runtimeWarning = udpRejected ? '' : routing?.warning
   return <article className="this-mac local-routing-card">
     <div className="source-head"><div><small>THIS MAC</small><h3>出口方式</h3></div><span className="effect-badge live">仅影响本机</span></div>
-    <p>{interfaceName || 'Mac'} · {lanIP || '本机网络'}</p>
-    <div className="local-mode-switch" role="group" aria-label="这台 Mac 的出口方式">
+    <p>{interfaceName || '本机'} · {lanIP || '本机网络'}</p>
+    <div className="local-mode-switch" role="group" aria-label="这台 NAS 的出口方式">
       {(['rule', 'global', 'direct'] as const).map(mode => <button
         key={mode}
         type="button"

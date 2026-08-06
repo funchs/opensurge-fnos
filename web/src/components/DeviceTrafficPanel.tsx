@@ -92,7 +92,7 @@ function RateCell({ rate = 0, total = 0 }: { rate?: number; total?: number }) {
 }
 
 function deviceName(device: DeviceTrafficRow) {
-  if (device.identity_source === 'gateway_local') return '本机 Mac'
+  if (device.identity_source === 'gateway_local') return '本机 NAS'
   if (device.name) return device.name
   if (device.hostname) return device.hostname
   if (!device.mac) return `当前设备 ${device.ip}`
