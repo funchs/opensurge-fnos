@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,8 +30,12 @@ import (
 )
 
 type Options struct {
-	ConfigPath        string
-	Addr              string
+	ConfigPath string
+	Addr       string
+	// BaseURL 是浏览器看到的地址，留空时等于 "http://" + Addr。
+	// 显式给了才允许 Addr 绑非 loopback —— 这是给「控制面跑在 NAS 上、
+	// 浏览器在另一台机器」的部署用的（见 docs/fnos-port/DEPLOY.md）。
+	BaseURL           string
 	StoreDir          string
 	Runner            ActionRunner
 	NetworkRunner     NetworkRunner
@@ -65,6 +70,10 @@ type Server struct {
 	trafficSampler    *trafficRateSampler
 	token             string
 	baseURL           string
+	// allowedHost 是 baseURL 的主机名。上游只放行 127.0.0.1 / localhost 来防
+	// DNS rebinding；控制面绑到局域网时，浏览器发来的 Host 是 NAS 的 IP，
+	// 必须一起放行，否则连静态页都是 403。
+	allowedHost string
 
 	mu         sync.Mutex
 	sessions   map[string]time.Time
@@ -90,8 +99,22 @@ func New(options Options) (*Server, error) {
 		options.Addr = "127.0.0.1:61767"
 	}
 	host, _, err := net.SplitHostPort(options.Addr)
-	if err != nil || (host != "127.0.0.1" && host != "localhost") {
+	if err != nil {
 		return nil, fmt.Errorf("control API must listen on loopback IPv4")
+	}
+	// 会话签发仍然要 control-token，放开绑定不等于无认证开放；但 baseURL 必须
+	// 是浏览器实际用的地址，否则 Origin 校验会挡掉所有写操作。
+	baseURL := "http://" + options.Addr
+	allowedHost := ""
+	if trimmed := strings.TrimSuffix(strings.TrimSpace(options.BaseURL), "/"); trimmed != "" {
+		parsed, err := url.Parse(trimmed)
+		if err != nil || parsed.Hostname() == "" {
+			return nil, fmt.Errorf("control API base URL is invalid: %s", trimmed)
+		}
+		baseURL = trimmed
+		allowedHost = parsed.Hostname()
+	} else if host != "127.0.0.1" && host != "localhost" {
+		return nil, fmt.Errorf("control API must listen on loopback IPv4 unless BaseURL is set")
 	}
 	if options.StoreDir == "" {
 		home, err := os.UserHomeDir()
@@ -170,7 +193,8 @@ func New(options Options) (*Server, error) {
 		probeConnectivity: probeConnectivityTarget,
 		trafficSampler:    newTrafficRateSampler(),
 		token:             token,
-		baseURL:           "http://" + options.Addr,
+		baseURL:           baseURL,
+		allowedHost:       allowedHost,
 		sessions:          map[string]time.Time{},
 		bootstraps:        map[string]bootstrapGrant{},
 	}, nil
@@ -357,7 +381,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		if parsed, _, err := net.SplitHostPort(r.Host); err == nil {
 			host = parsed
 		}
-		if host != "127.0.0.1" && host != "localhost" {
+		if host != "127.0.0.1" && host != "localhost" && (s.allowedHost == "" || host != s.allowedHost) {
 			writeError(w, http.StatusForbidden, "invalid_host", "request host is not allowed")
 			return
 		}
