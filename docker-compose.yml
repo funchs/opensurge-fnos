@@ -1,6 +1,6 @@
 services:
   opensurge:
-    image: ${OPENSURGE_IMAGE:-ghcr.io/funchs/opensurge-fnos:v0.1.0}
+    image: ${OPENSURGE_IMAGE:-ghcr.io/funchs/opensurge-fnos:v0.1.1}
     container_name: opensurge
     # 旁路由必须走宿主网络：要看得见真实网卡、要能建 TUN、nftables 规则要作用在宿主上。
     network_mode: host
@@ -16,6 +16,10 @@ services:
       - ./config:/etc/opensurge
       - ./state:/var/lib/opensurge
     environment:
-      # 局域网内直接开 http://<NAS-IP>:61767，控制面无密码，别暴露到公网。
+      # 绑 0.0.0.0 只是让局域网连得上；签发会话仍要 state/store/control-token。
+      # 是 HTTP 明文，token 会裸奔，别暴露到公网。
       OPENSURGE_ADDR: 0.0.0.0:61767
+      # 浏览器侧看到的地址，Origin 校验用。不填时只允许绑 loopback（上游行为），
+      # 从别的机器访问会被拦。留空则由 entrypoint 从 gateway.lan_ip 推导。
+      OPENSURGE_BASE_URL: ${OPENSURGE_BASE_URL:-}
     restart: unless-stopped
