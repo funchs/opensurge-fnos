@@ -1,8 +1,23 @@
 import type { ReactNode } from 'react'
 import { recoveryLabel } from '../status'
 
+// 后端给的是 RFC3339（带纳秒和时区偏移），直接显示读起来很费劲。
+// 当天的只留时间，跨天的补上日期。
+export function formatTimestamp(value?: string) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const now = new Date()
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate()
+  if (sameDay) return time
+  return `${date.toLocaleDateString([], { month: '2-digit', day: '2-digit' })} ${time}`
+}
+
 export function RecoveryBanner({ recovery, onOpen }: { recovery: string; onOpen: () => void }) {
-  return <div className="recovery-banner" role="alert"><span aria-hidden="true">⚠</span><div><strong>网络恢复尚未完成</strong><p>{recoveryLabel(recovery)}。网络已开始变更；请在网络设置中完成状态机，并在路由器 DHCP 恢复已验证前不要把 Mac 切回自动 DHCP。</p></div><button onClick={onOpen}>继续恢复</button></div>
+  return <div className="recovery-banner" role="alert"><span aria-hidden="true">⚠</span><div><strong>网络恢复尚未完成</strong><p>{recoveryLabel(recovery)}。网络已开始变更；请在网络设置中完成状态机，并在路由器 DHCP 恢复已验证前不要把 NAS 切回自动 DHCP。</p></div><button onClick={onOpen}>继续恢复</button></div>
 }
 
 export function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {

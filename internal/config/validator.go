@@ -77,7 +77,7 @@ func validate(cfg Config, checkDevicePolicy bool) error {
 		return fmt.Errorf("mihomo.redir_port must be between 0 and 65535")
 	}
 	if cfg.Mihomo.RedirPort != 0 {
-		return fmt.Errorf("mihomo.redir_port is not supported on macOS; use transparent.mode: \"tun\"")
+		return fmt.Errorf("mihomo.redir_port is not supported; use transparent.mode: \"tun\"")
 	}
 	if strings.TrimSpace(cfg.Mihomo.APIAddr) == "" {
 		return fmt.Errorf("mihomo.api_addr is required")
@@ -92,7 +92,7 @@ func validate(cfg Config, checkDevicePolicy bool) error {
 		return fmt.Errorf("pf.redirect_tcp_to must be between 0 and 65535")
 	}
 	if cfg.PF.RedirectTCPTo != 0 {
-		return fmt.Errorf("pf.redirect_tcp_to is not supported on macOS; use transparent.mode: \"tun\"")
+		return fmt.Errorf("pf.redirect_tcp_to is not supported; use transparent.mode: \"tun\"")
 	}
 	if err := validateTransparent(cfg.Transparent); err != nil {
 		return err
@@ -263,7 +263,7 @@ func validateTransparent(cfg TransparentConfig) error {
 		return nil
 	case TransparentModeTUN:
 		if !strings.HasPrefix(cfg.TUNDevice, "utun") {
-			return fmt.Errorf("transparent.tun_device must start with utun on macOS")
+			return fmt.Errorf("transparent.tun_device must start with utun")
 		}
 		switch cfg.TUNStack {
 		case "system", "gvisor", "mixed":
