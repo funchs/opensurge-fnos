@@ -14,7 +14,8 @@ import (
 
 func main() {
 	configPath := flag.String("config", "examples/config.example.yaml", "path to gateway config")
-	addr := flag.String("addr", "127.0.0.1:61767", "loopback listen address")
+	addr := flag.String("addr", "127.0.0.1:61767", "listen address; must be loopback unless -base-url is set")
+	baseURL := flag.String("base-url", "", "browser-facing base URL, e.g. http://192.168.1.20:61767; required when -addr is not loopback")
 	storeDir := flag.String("store", "", "application support directory")
 	helperSocket := flag.String("helper-socket", "/var/run/opensurge/helper.sock", "privileged helper socket")
 	direct := flag.Bool("direct-root", false, "run actions directly; requires root and is intended for development")
@@ -27,6 +28,7 @@ func main() {
 	server, err := controlapi.New(controlapi.Options{
 		ConfigPath: *configPath,
 		Addr:       *addr,
+		BaseURL:    *baseURL,
 		StoreDir:   *storeDir,
 		Runner:     runner,
 		Static:     webui.Handler(),

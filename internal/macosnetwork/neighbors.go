@@ -1,3 +1,5 @@
+//go:build darwin
+
 package macosnetwork
 
 import (
@@ -6,15 +8,6 @@ import (
 	"net"
 	"strings"
 )
-
-// Neighbor is a currently cached IPv4-to-MAC mapping on a macOS interface.
-// The ARP cache is observation evidence only; it is not an ownership or
-// authentication guarantee.
-type Neighbor struct {
-	IP        string `json:"ip"`
-	MAC       string `json:"mac"`
-	Interface string `json:"interface"`
-}
 
 func DiscoverNeighbors(ctx context.Context, interfaceName string) ([]Neighbor, error) {
 	interfaceName = strings.TrimSpace(interfaceName)
