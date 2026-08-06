@@ -1,6 +1,7 @@
 # OpenSurge for fnOS — 移植设计
 
-> 状态：已确认，待实施
+> 状态：步骤 1–6 已实施。**先读文末的「实施后的偏差」**——本文有几处设想
+> 在真机上被证伪了，那一节是准的。部署步骤见 [DEPLOY.md](DEPLOY.md)。
 > 上游：https://github.com/YTwsy/OpenSurge-for-Mac (GPL-3.0, 默认分支 `master`)
 > 本项目分支：`fnos-port`
 > Go module：`open-mihomo-gateway`
@@ -275,6 +276,70 @@ services:
 | 不跑 dnsmasq，无 DHCP lease | `internal/device/scanner.go` 的 lease 数据源为空，**设备名降级为 IP + MAC + 厂商**，没有主机名 | 想要主机名时启用 `internal/dhcp` + 加一个 dnsmasq 容器 |
 | 网络配置页不可用 | Web GUI 里改本机 IP / 系统代理的功能返回 `ErrManagedByFnOS` | 不打算解决，这是设计决策 |
 | `Discover` 的 `IPv4Mode` 恒为 dhcp | 状态页不区分 fnOS 是静态还是 DHCP 拿的 IP | 需要时读 `/etc/network/interfaces` 或 netplan |
+
+---
+
+## 实施后的偏差
+
+实施过程中被代码或真机推翻的设想，按影响从大到小排：
+
+### 1. 控制面必须改代码才能对局域网提供服务（本文完全没预料到）
+
+上游有**三层**耦合把控制面锁死在 loopback：
+
+- `server.go` 直接拒绝非 loopback 的监听地址；
+- `baseURL` 由监听地址推导，而所有写操作要求 `Origin` 完全等于它
+  —— 绑 `0.0.0.0` 会让 baseURL 变成 `http://0.0.0.0:61767`，GUI 变只读；
+- `securityHeaders` 校验 `Host` 头必须是 `127.0.0.1`/`localhost`（防 DNS rebinding），
+  局域网地址连静态页都 403。
+
+解法：给 `controlapi.Options` 加可选的 `BaseURL`（浏览器看到的地址），
+**不填时行为和上游完全一致**，填了才放行非 loopback 绑定，并把它的主机名
+加入 Host 白名单。这是本次唯一改到上游共享文件的地方（约 15 行，加法式）。
+测试见 `internal/controlapi/baseurl_test.go`。
+
+### 2. dnsmasq 必须装进镜像
+
+`internal/dhcp/dnsmasq.go` 的 `shouldRun() = DHCP.Enabled || Gateway.SameLAN()`。
+旁路由用的就是 `same_lan` 模式，所以本文「不跑 dnsmasq」不成立。
+它在这个模式下只做 DNS 转发（转给 mihomo 的 `127.0.0.1#1053`），不发地址，
+所以「无 lease、设备名降级」的结论仍然成立。
+
+### 3. 容器需要 `SYS_ADMIN`
+
+网关启动要写 `net.ipv4.ip_forward`，但 Docker 默认把 `/proc/sys` 挂成只读，
+且 `network_mode: host` 下不能用 compose 的 `sysctls:`。实测：仅 `NET_ADMIN` ✗，
+`+SYS_ADMIN` 且 entrypoint 里 `mount -o remount,rw /proc/sys` ✓。
+比 `privileged` 窄。
+
+### 4. Web GUI 需要一个换登录链接的口子
+
+所有 API 要 session cookie，浏览器必须先走 `/bootstrap?code=...`，
+而该链接 30 秒过期、只在启动时打印一次——在 Docker 里等看到 `docker logs` 就废了。
+不用改代码：token 持久化在 `<store>/control-token`，用它 POST
+`/api/v1/session/bootstrap` 随时换新链接 → `scripts/fnos-gui-url.sh`。
+
+### 5. 其它小项
+
+- 冒烟检查里的 `/api/status` 端点不存在，实际路由是 `/api/v1/overview`（且需认证）。
+- nftables 的 NAT 规则改用 `oifname "<上游网卡>" ip saddr <LAN网段>`
+  （same_lan 再加 `ip daddr != <LAN网段>`），与 macOS 的 pf anchor 一一对应，
+  不需要 TUN 名字，规则范围也更窄。
+- 规则文件复用 `paths.PFAnchor`，没有新增 `opensurge.nft` 路径（不动 `runtime.Paths`）。
+- nft 表名硬编码 `opensurge`；`cfg.PF.AnchorName` 的默认值不是合法 nft 标识符。
+- `ip neigh` 用 `-j` JSON 解析而非切文本字段；MAC 用小写（与上游 `parseNeighbors` 一致，
+  本文写的「统一大写」是笔误）。
+- `VerifyManual` 是纯函数，放共享层而非 Linux stub。
+- 示例配置放在 `examples/config.fnos.example.yaml`，没有新建 `configs/` 目录。
+- 顺带删掉了 `.github/workflows/release-unsigned.yml` 和
+  `packaging/unsigned-release-notes.md`（macOS pkg 发布流水线，脚本删了就是死代码）。
+
+### 尚未验证的部分
+
+`nft` 对**宿主网络命名空间**的操作、以及 TUN 建立，在开发机（macOS + OrbStack）
+上无法验证：OrbStack 的 VM 里 `nft` 访问宿主 netns 会段错误（与架构无关，
+私有 netns 正常），且没有 `/dev/net/tun`。这两条路径必须在真机上跑
+`./scripts/smoke-fnos.sh --start-gateway` 确认。
 
 ---
 

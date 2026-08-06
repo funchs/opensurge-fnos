@@ -1,0 +1,69 @@
+# fnOS 飞牛 NAS 旁路由预设。
+#
+# 用法：复制成 ./config/config.yaml，改掉下面三处标了 ← 改我 的值，再 docker compose up -d。
+# 设备侧：手动把网关和 DNS 都指向 NAS 的 IP（不接管 DHCP，见 docs/fnos-port/DESIGN.md）。
+
+gateway:
+  # same_lan = 旁路由：NAS 和设备在同一个网段，网关口和上游口是同一块网卡。
+  mode: "same_lan"
+  interface: "eth0"           # ← 改我：fnOS 上跑 `ip -br link` 看网卡名
+  lan_ip: "192.168.1.20"      # ← 改我：NAS 在局域网里的 IPv4（fnOS 系统设置里那个）
+  upstream_interface: "eth0"  # ← 改我：same_lan 模式下必须和 interface 相同
+
+dhcp:
+  # 旁路由不接管 DHCP。same_lan 模式下校验器强制 enabled: false。
+  # dnsmasq 仍会启动，但只做 DNS 转发，不发地址。
+  binary: "dnsmasq"
+  enabled: false
+  range_start: "192.168.1.100"
+  range_end: "192.168.1.200"
+  lease_time: "12h"
+  domain: "lan"
+
+dns:
+  listen: "192.168.1.20"      # ← 改我：和 gateway.lan_ip 一致
+  port: 53
+  # 转发给 mihomo 的 DNS，保住 fake-IP 和 TUN 的 dns-hijack 语义。别改成公共 DNS。
+  upstream: "127.0.0.1#1053"
+
+mihomo:
+  binary: "mihomo"
+  config: "/var/lib/opensurge/mihomo.yaml"
+  profile_mode: "managed"
+  profile: ""
+  mixed_port: 7890
+  redir_port: 0               # Linux 上也走 TUN，不用 redir
+  api_addr: "127.0.0.1:9090"
+  secret: ""
+
+pf:
+  # Linux 上防火墙走 nftables（table inet opensurge），这两个字段不生效，
+  # 但校验器要求 anchor_name 非空。
+  anchor_name: "opensurge"
+  redirect_tcp_to: 0
+
+transparent:
+  mode: "tun"
+  # 必须以 utun 开头（上游校验器的硬约束），在 Linux 上就是普通网卡名。
+  tun_device: "utun123"
+  tun_stack: "mixed"
+  tun_auto_route: true
+  tun_auto_detect_interface: false
+  tun_strict_route: false
+
+local_system_proxy:
+  # Linux 无等价物，开了会拿到 ErrManagedByFnOS。保持 false。
+  enabled: false
+
+upstream_proxy:
+  enabled: false
+  name: "fnos-egress"
+  type: "http"
+  server: "127.0.0.1"
+  port: 18080
+  username: ""
+  password: ""
+  match_domain: "example.com"
+
+runtime:
+  dir: "/var/lib/opensurge"
