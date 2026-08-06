@@ -103,7 +103,7 @@ describe('DevicesPage', () => {
 
     await screen.findByText('alice')
     const stack = document.querySelector('.device-stack') as HTMLElement
-    expect(screen.getByRole('heading', { name: '当前 Mac 的设备设置' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '本机 NAS 的设备设置' })).toBeTruthy()
     expect(stack.querySelectorAll('.device-card')).toHaveLength(2)
 
     const saveBar = document.querySelector('.sticky-save') as HTMLElement
@@ -284,7 +284,7 @@ describe('DevicesPage', () => {
     }))
     renderPage({ ...overview, topology: 'same_lan' } as unknown as Overview)
 
-    expect(await screen.findByText('当前经过 Mac 的设备')).toBeTruthy()
+    expect(await screen.findByText('当前经过网关的设备')).toBeTruthy()
     expect(screen.getByText('未登记设备 192.168.1.137')).toBeTruthy()
     expect(screen.getByText(/3 个活跃连接/)).toBeTruthy()
     expect(screen.getByText(/MAC 尚未从邻居表解析/)).toBeTruthy()
@@ -299,7 +299,7 @@ describe('DevicesPage', () => {
   it('registers multiple same-LAN devices by fixed IPv4 without inventing a MAC', async () => {
     renderPage({ ...overview, topology: 'same_lan' } as unknown as Overview)
 
-    await screen.findByText('当前经过 Mac 的设备')
+    await screen.findByText('当前经过网关的设备')
     expect(screen.getByText('MAC 地址（可选身份信息）')).toBeTruthy()
     await userEvent.type(screen.getByLabelText('设备名称'), 'IP Only One')
     await userEvent.type(screen.getByLabelText('固定 IPv4'), '192.168.1.137')
@@ -467,7 +467,7 @@ describe('DevicesPage', () => {
     }))
     renderPage({ ...overview, topology: 'same_lan' } as unknown as Overview)
 
-    expect(await screen.findByText('静态配置身份：等待该 IPv4 经过 Mac')).toBeTruthy()
+    expect(await screen.findByText('静态配置身份：等待该 IPv4 经过网关')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '使用当前 IP 并应用' })).toBeNull()
     expect(screen.getByText('设备按登记 IP 接入后生效')).toBeTruthy()
   })
@@ -485,7 +485,7 @@ describe('DevicesPage', () => {
     }))
     renderPage({ ...overview, topology: 'same_lan' } as unknown as Overview)
 
-    expect(await screen.findByText('静态配置身份：等待该 IPv4 经过 Mac')).toBeTruthy()
+    expect(await screen.findByText('静态配置身份：等待该 IPv4 经过网关')).toBeTruthy()
     expect(screen.getByText('设备按登记 IP 接入后生效')).toBeTruthy()
     const outlet = screen.getByLabelText('alice 独立出口 当前摘要') as HTMLButtonElement
     expect(outlet.disabled).toBe(false)

@@ -301,7 +301,7 @@ describe('OpenSurge app shell', () => {
     render(<App />)
 
     await userEvent.click(await screen.findByRole('button', { name: '停止网关' }))
-    expect((await screen.findByLabelText('Mac 网关 IPv4')).closest('fieldset')?.hasAttribute('disabled')).toBe(true)
+    expect((await screen.findByLabelText('NAS 网关 IPv4')).closest('fieldset')?.hasAttribute('disabled')).toBe(true)
     await userEvent.click(screen.getByRole('button', { name: '停止旁路由模式' }))
 
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('设备可能立即断网'))
@@ -315,7 +315,7 @@ describe('OpenSurge app shell', () => {
     render(<App />)
 
     await userEvent.click(await screen.findByRole('button', { name: '启动网关' }))
-    const gatewayIPv4 = await screen.findByLabelText('Mac 网关 IPv4')
+    const gatewayIPv4 = await screen.findByLabelText('NAS 网关 IPv4')
     await userEvent.clear(gatewayIPv4)
     await userEvent.type(gatewayIPv4, '192.168.50.1')
 
@@ -339,7 +339,7 @@ describe('OpenSurge app shell', () => {
     })
     render(<App />)
     expect(await screen.findByRole('heading', { name: '活跃设备' })).toBeTruthy()
-    expect(screen.getByText('本机 Mac')).toBeTruthy()
+    expect(screen.getByText('本机 NAS')).toBeTruthy()
     expect(screen.getByText('网关本机 · TUN')).toBeTruthy()
     expect(await screen.findByText('Apple-TV')).toBeTruthy()
     expect(screen.getAllByText('流媒体组 → 美国-02').length).toBeGreaterThan(0)
@@ -355,7 +355,7 @@ describe('OpenSurge app shell', () => {
     expect(screen.getByText('待识别设备连接')).toBeTruthy()
     expect(screen.getByText('192.168.1.88')).toBeTruthy()
     const trafficRows = screen.getAllByRole('button', { name: /流量趋势/ })
-    expect(trafficRows[0].getAttribute('aria-label')).toContain('本机 Mac 192.168.1.20')
+    expect(trafficRows[0].getAttribute('aria-label')).toContain('本机 NAS 192.168.1.20')
 
     const deviceButton = screen.getByRole('button', { name: '查看 Apple-TV 192.168.1.88 流量趋势' })
     await userEvent.click(deviceButton)
@@ -376,7 +376,7 @@ describe('OpenSurge app shell', () => {
 
     render(<App />)
 
-    expect(await screen.findByText('本机 Mac')).toBeTruthy()
+    expect(await screen.findByText('本机 NAS')).toBeTruthy()
     expect(screen.getByText('网关本机 · 显式代理')).toBeTruthy()
   })
 
@@ -492,7 +492,7 @@ describe('OpenSurge app shell', () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: '网络设置' }))
     expect((await screen.findByRole('button', { name: '路由器 DHCP 已恢复，执行 OFFER 探测' })).hasAttribute('disabled')).toBe(false)
-    expect(screen.getByRole('button', { name: '跳过 OFFER 探测并恢复 Mac 自动 DHCP' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: '跳过 OFFER 探测并恢复 NAS 自动 DHCP' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('button', { name: '保留静态 IP 并结束' }).hasAttribute('disabled')).toBe(false)
     await userEvent.click(screen.getByRole('button', { name: '路由器 DHCP 已恢复，执行 OFFER 探测' }))
     expect(api.confirmRouterRestored).toHaveBeenCalledOnce()
@@ -503,8 +503,8 @@ describe('OpenSurge app shell', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: '网络设置' }))
-    await userEvent.click(await screen.findByRole('button', { name: '跳过 OFFER 探测并恢复 Mac 自动 DHCP' }))
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('如果路由器 DHCP 实际未恢复，Mac 可能断网'))
+    await userEvent.click(await screen.findByRole('button', { name: '跳过 OFFER 探测并恢复 NAS 自动 DHCP' }))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('如果路由器 DHCP 实际未恢复，NAS 可能断网'))
     expect(api.finishRecoveryManually).toHaveBeenCalledOnce()
   })
 
@@ -514,7 +514,7 @@ describe('OpenSurge app shell', () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: '网络设置' }))
     await userEvent.click(await screen.findByRole('button', { name: '保留静态 IP 并结束' }))
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('不会探测路由器 DHCP，也不会把 Mac 切回自动 DHCP'))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('不会探测路由器 DHCP，也不会把 NAS 切回自动 DHCP'))
     expect(api.finishRecoveryKeepingStatic).toHaveBeenCalledOnce()
     expect(api.restoreMacDHCP).not.toHaveBeenCalled()
     expect(api.confirmRouterRestored).not.toHaveBeenCalled()
@@ -524,10 +524,10 @@ describe('OpenSurge app shell', () => {
     vi.mocked(api.overview).mockResolvedValue({ ...overview, recovery: { ...overview.recovery, stage: 'router_dhcp_restored' } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: '网络设置' }))
-    await screen.findByRole('button', { name: '将 Mac 恢复为自动 DHCP' })
+    await screen.findByRole('button', { name: '将 NAS 恢复为自动 DHCP' })
     await waitFor(() => expect(api.gatewayPlan).toHaveBeenCalled())
     vi.mocked(api.gatewayPlan).mockClear()
-    await userEvent.click(screen.getByRole('button', { name: '将 Mac 恢复为自动 DHCP' }))
+    await userEvent.click(screen.getByRole('button', { name: '将 NAS 恢复为自动 DHCP' }))
     await waitFor(() => expect(api.restoreMacDHCP).toHaveBeenCalled())
     expect(api.gatewayPlan).not.toHaveBeenCalled()
     expect(screen.queryByText(/does not expose a complete IPv4 configuration/)).toBeNull()
@@ -548,10 +548,10 @@ describe('OpenSurge app shell', () => {
     await userEvent.click(screen.getByRole('button', { name: '网络设置' }))
     const save = await screen.findByRole('button', { name: '保存网络配置' })
     expect(save.hasAttribute('disabled')).toBe(false)
-    await userEvent.clear(screen.getByLabelText('Mac 网关 IPv4'))
-    await userEvent.type(screen.getByLabelText('Mac 网关 IPv4'), '192.168.1.21')
+    await userEvent.clear(screen.getByLabelText('NAS 网关 IPv4'))
+    await userEvent.type(screen.getByLabelText('NAS 网关 IPv4'), '192.168.1.21')
     expect(screen.getByText('网络配置有未保存的修改。先保存配置，再保存恢复资料或继续第 2 步。')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '将 Mac 切换为固定 IPv4' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: '将 NAS 切换为固定 IPv4' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('saves the opt-in macOS HTTP and HTTPS system proxy coordination mode', async () => {
@@ -581,7 +581,7 @@ describe('OpenSurge app shell', () => {
     vi.mocked(api.applyStatic).mockRejectedValue(new RequestError(502, 'static_ipv4_not_applied', 'Mac 仍未使用预期的固定 IPv4 192.168.1.20。请在系统设置中确认“配置 IPv4”为“手动”后重试。'))
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: '网络设置' }))
-    await userEvent.click(await screen.findByRole('button', { name: '将 Mac 切换为固定 IPv4' }))
+    await userEvent.click(await screen.findByRole('button', { name: '将 NAS 切换为固定 IPv4' }))
 
     const warning = await screen.findByRole('alert')
     expect(warning.textContent).toContain('Mac 仍未使用预期的固定 IPv4 192.168.1.20')
