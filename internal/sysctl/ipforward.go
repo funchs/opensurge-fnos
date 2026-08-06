@@ -30,12 +30,7 @@ func (m Manager) Current() (string, error) {
 }
 
 func (m Manager) Enable() error {
-	// 先检查当前值，已经是 1 就不写（容器环境下 /proc/sys 可能只读）
-	current, err := m.Current()
-	if err == nil && strings.TrimSpace(current) == "1" {
-		return nil
-	}
-	return setIPForwarding("1")
+	return m.setIfNeeded("1")
 }
 
 func (m Manager) Restore(previous string) error {
@@ -43,7 +38,18 @@ func (m Manager) Restore(previous string) error {
 	if previous == "" {
 		return nil
 	}
-	return setIPForwarding(previous)
+	return m.setIfNeeded(previous)
+}
+
+// setIfNeeded 只在当前值和目标不同时才写。容器里 /proc/sys 常是只读的
+// （fnOS 连 SYS_ADMIN 都不给 remount），此时读得到、写不进去；目标值已经
+// 满足就不该因为写失败而让启停失败。
+func (m Manager) setIfNeeded(value string) error {
+	current, err := m.Current()
+	if err == nil && strings.TrimSpace(current) == value {
+		return nil
+	}
+	return setIPForwarding(value)
 }
 
 func setIPForwarding(value string) error {

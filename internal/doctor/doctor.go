@@ -31,7 +31,7 @@ func Run(cfg config.Config) Report {
 		checkPath("dnsmasq", cfg.DHCP.Binary),
 		checkPath("mihomo", cfg.Mihomo.Binary),
 		checkMihomoConfigRender(cfg),
-		checkCommand("pfctl", "pfctl"),
+		checkCommand(firewallCheckName, firewallCommand),
 		checkInterface(cfg.Gateway.Interface),
 		checkInterface(cfg.Gateway.UpstreamInterface),
 		checkGatewayInterfaceTopology(cfg.Gateway),
