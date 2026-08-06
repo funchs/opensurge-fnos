@@ -5,17 +5,19 @@
 
 ## 一、准备镜像
 
-镜像只出 `linux/amd64`（飞牛主流的 N100 / N305 都是 x86），已推到：
+镜像同时提供 `linux/amd64` 和 `linux/arm64`，`docker pull` 会自动选对应架构：
 
 ```
-ghcr.io/funchs/opensurge-fnos:v0.1.0             # 推荐：固定版本，对应 git tag v0.1.0
+ghcr.io/funchs/opensurge-fnos:v0.1.1             # 推荐：固定版本，多架构
 ghcr.io/funchs/opensurge-fnos:latest             # 跟着主线走
-ghcr.io/funchs/opensurge-fnos:sha-<git 短 sha>   # 精确定位某次构建
+ghcr.io/funchs/opensurge-fnos:v0.1.0             # 仅 amd64（多架构支持之前的版本）
 ```
 
-三个标签当前指向同一 digest
-`sha256:9a7e6162e0b1c395453a0527be0c205a43b988682b0eb442ab51c1d4d480fd27`。
-生产环境用 `v0.1.0` 或 `sha-` 标签，别用 `latest`——它会随下次推送变化。
+- **amd64** —— 飞牛主流的 N100 / N305 等 x86 机型
+- **arm64** —— 飞牛 ARM 版（瑞芯微 / 全志 / 鲲鹏等），以及**在 Apple Silicon 虚拟机里
+  跑 fnOS ARM 做验证**的场景（见文末「先在虚拟机里验证」）
+
+生产环境用 `v0.1.1` 这样的固定版本，别用 `latest`——它会随下次推送变化。
 
 package 已设为 **public**，NAS 上直接 `docker compose pull` 即可，**不需要登录**。
 
@@ -29,9 +31,14 @@ package 已设为 **public**，NAS 上直接 `docker compose pull` 即可，**�
 gh auth refresh -h github.com -s write:packages
 gh auth token | docker login ghcr.io -u funchs --password-stdin
 
-make docker-push                                              # → :latest
-make docker-push IMAGE=ghcr.io/funchs/opensurge-fnos:sha-$(git rev-parse --short HEAD)
+make docker-push                       # 单架构（构建机的架构）
+make docker-push-multiarch VERSION=v0.1.2   # 双架构 + 合并 manifest
 ```
+
+> **为什么多架构不用 `docker buildx --platform a,b` 一步到位**：buildx 的容器化
+> builder 有自己的 buildkitd 配置，**继承不到 daemon 的 registry mirror**，
+> 国内网络下拉 `golang` / `debian` 基础镜像会 EOF 失败。所以改成用默认 builder
+> 分架构构建（走得到 mirror），再用 `imagetools create` 合并 manifest。
 
 ## 二、NAS 上准备目录
 
@@ -133,3 +140,51 @@ nft delete table inet opensurge
 sysctl -w net.ipv4.ip_forward=0
 rm /vol1/docker/opensurge/state/state.json
 ```
+
+---
+
+## 附：先在虚拟机里验证（推荐首次部署前做）
+
+不想拿真机冒险的话，可以先在 Apple Silicon Mac 上装一台 fnOS ARM 虚拟机跑一遍。
+这比装普通 Debian 虚拟机更有价值——能一并验到 fnOS 特有的部分（Docker 项目导入、
+fnOS 网络设置与 `ErrManagedByFnOS` 的交互）。
+
+飞牛官方的 ARM 版明确支持苹果 M 系列的虚拟化环境，下载页有一个
+**「UEFI ARM 安装镜像 ISO」**（标注「支持 此芯 P1 / 苹果M系列（虚拟化）」）：
+<https://www.fnnas.com/download-arm>
+
+> ARM 版目前是公测版，官方声明「请勿用于生产环境或存储唯一重要数据」。
+> 拿来做一次性验证正合适，别拿它当真机用。
+
+### 虚拟机配置
+
+```bash
+brew install --cask utm     # 免费开源
+```
+
+| 项 | 选什么 | 为什么 |
+|---|---|---|
+| 类型 | **虚拟化**（Virtualize），不是模拟 | 选错就是龟速，等于白验 |
+| 内存 / CPU / 磁盘 | 4 GB / 4 核 / 40 GB | 够装系统 + 镜像 + 日志 |
+| 网络 | **桥接**（Bridged） | 旁路由验的就是网络转发行为，NAT 会掩盖问题 |
+
+桥接后虚拟机会从你家路由器拿到真实局域网 IP，和真机环境一致。
+
+### 在虚拟机里跑
+
+和真机流程完全相同，只是 `config.yaml` 里的网卡名和 IP 换成虚拟机的
+（`ip -br addr` 查）。镜像是多架构的，`docker compose pull` 会自动拉 arm64 那份。
+
+```bash
+docker compose up -d
+./scripts/smoke-fnos.sh --start-gateway
+```
+
+搞砸了删掉虚拟机重建即可，真机零风险。
+
+### 虚拟机验不到的部分
+
+- **真实硬件网卡的驱动行为**（虚拟机用 virtio）
+- **x86 与 arm64 的架构差异**——不过本项目的 Go 代码不含架构相关逻辑，
+  依赖的 `nft` / `ip` / `dnsmasq` 也都是 Debian 同源包
+- **你家网络的实际拓扑**（虚拟机和真机可能在不同网段）
