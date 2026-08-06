@@ -8,9 +8,14 @@
 镜像只出 `linux/amd64`（飞牛主流的 N100 / N305 都是 x86），已推到：
 
 ```
-ghcr.io/funchs/opensurge-fnos:latest
-ghcr.io/funchs/opensurge-fnos:sha-<git 短 sha>    # 精确定位某次构建，推荐生产用这个
+ghcr.io/funchs/opensurge-fnos:v0.1.0             # 推荐：固定版本，对应 git tag v0.1.0
+ghcr.io/funchs/opensurge-fnos:latest             # 跟着主线走
+ghcr.io/funchs/opensurge-fnos:sha-<git 短 sha>   # 精确定位某次构建
 ```
+
+三个标签当前指向同一 digest
+`sha256:9a7e6162e0b1c395453a0527be0c205a43b988682b0eb442ab51c1d4d480fd27`。
+生产环境用 `v0.1.0` 或 `sha-` 标签，别用 `latest`——它会随下次推送变化。
 
 package 已设为 **public**，NAS 上直接 `docker compose pull` 即可，**不需要登录**。
 
