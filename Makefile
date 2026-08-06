@@ -1,5 +1,5 @@
 .PHONY: test build doctor status policy-control-test
-.PHONY: web-install web-build web-test control-build control-run docker-build docker-push
+.PHONY: web-install web-build web-test control-build control-run docker-build docker-push docker-push-multiarch
 .PHONY: lab-install lab-uninstall-root lab-check lab-up lab-status lab-test
 .PHONY: lab-test-tun lab-test-tun-imported-profile lab-test-tun-imported-egress lab-test-tun-local-routing lab-test-tun-device-policy lab-down lab-destroy
 .PHONY: real-device-start-off real-device-start-tun real-device-start-tun-proxy
@@ -35,15 +35,32 @@ control-build: web-build
 control-run: control-build
 	./bin/opensurge-control --config examples/config.example.yaml
 
-# 飞牛 NAS 是 amd64（N100 / N305 等），固定出这一个架构。
-# 换 registry：make docker-push IMAGE=ghcr.io/你的账号/opensurge-fnos:v0.1.0
-IMAGE ?= ghcr.io/funchs/opensurge-fnos:latest
+REPO ?= ghcr.io/funchs/opensurge-fnos
+VERSION ?= latest
+IMAGE ?= $(REPO):$(VERSION)
 
 docker-build:
 	docker build --platform linux/amd64 -t $(IMAGE) .
 
 docker-push: docker-build
 	docker push $(IMAGE)
+
+# 多架构：amd64（x86 飞牛机型）+ arm64（ARM 飞牛，以及 Apple Silicon 虚拟机验证）。
+#
+# 不用 `buildx --platform amd64,arm64` 一步到位，是因为 buildx 的容器化 builder
+# 有自己的 buildkitd 配置，继承不到 daemon 的 registry mirror，国内网络下拉
+# golang / debian 基础镜像会 EOF。默认 builder 走得到 mirror，所以分开构建再合并。
+docker-push-multiarch:
+	docker build --platform linux/amd64 -t $(REPO):$(VERSION)-amd64 .
+	docker push $(REPO):$(VERSION)-amd64
+	docker build --platform linux/arm64 -t $(REPO):$(VERSION)-arm64 .
+	docker push $(REPO):$(VERSION)-arm64
+	docker buildx imagetools create -t $(REPO):$(VERSION) \
+		$(REPO):$(VERSION)-amd64 $(REPO):$(VERSION)-arm64
+	@# latest 跟着主线走：发版时顺手把它指到同一组 manifest。
+	[ "$(VERSION)" = latest ] || docker buildx imagetools create -t $(REPO):latest \
+		$(REPO):$(VERSION)-amd64 $(REPO):$(VERSION)-arm64
+	docker buildx imagetools inspect $(REPO):$(VERSION)
 
 doctor:
 	go run ./cmd/omg doctor --config examples/config.example.yaml
