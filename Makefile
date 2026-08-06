@@ -50,6 +50,14 @@ docker-push: docker-build
 # 不用 `buildx --platform amd64,arm64` 一步到位，是因为 buildx 的容器化 builder
 # 有自己的 buildkitd 配置，继承不到 daemon 的 registry mirror，国内网络下拉
 # golang / debian 基础镜像会 EOF。默认 builder 走得到 mirror，所以分开构建再合并。
+# 调试轮次专用：反复覆盖 :dev，不占用版本号，也不动 :latest。
+# 只推目标机器要的那一个架构（默认 arm64，x86 机型传 ARCH=amd64）。
+# 验证跑通了再 make docker-push-multiarch VERSION=vX.Y.Z 打正式版。
+ARCH ?= arm64
+docker-push-dev:
+	docker build --platform linux/$(ARCH) -t $(REPO):dev .
+	docker push $(REPO):dev
+
 docker-push-multiarch:
 	docker build --platform linux/amd64 -t $(REPO):$(VERSION)-amd64 .
 	docker push $(REPO):$(VERSION)-amd64
