@@ -129,7 +129,8 @@ button{cursor:pointer}
 .notice.warn{border:1px solid #5b4b29;background:#2b2414;color:#ead4a0}
 .notice.actionable{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #29483c}
 .notice.actionable p{margin:4px 0 0;color:#82978f}
-.notice.actionable button{flex:0 0 auto}
+.notice.actionable button{flex:0 0 auto;background:#172b25;border:1px solid #2b433b;color:#cbd8d3;border-radius:8px;padding:8px 12px;font-weight:750}
+.notice.actionable button:disabled{opacity:.45;cursor:not-allowed}
 .error-banner{display:flex;align-items:center;gap:14px;background:#321a18;border:1px solid #6b3932;margin-bottom:18px}
 .error-banner span{color:#ffad9f;font-weight:800}
 .error-banner p{flex:1;margin:0}
