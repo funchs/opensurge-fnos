@@ -30,6 +30,11 @@ func (m Manager) Current() (string, error) {
 }
 
 func (m Manager) Enable() error {
+	// 先检查当前值，已经是 1 就不写（容器环境下 /proc/sys 可能只读）
+	current, err := m.Current()
+	if err == nil && strings.TrimSpace(current) == "1" {
+		return nil
+	}
 	return setIPForwarding("1")
 }
 
