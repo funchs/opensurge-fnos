@@ -27,10 +27,17 @@ mkdir -p "$STORE"
 
 # Docker 默认把 /proc/sys 挂成只读，网关启动时要写 net.ipv4.ip_forward 会失败。
 # 实测只给 NET_ADMIN 写不进去，得靠 SYS_ADMIN 把它 remount 成 rw（比 privileged 窄）。
+# 部分环境（fnOS）即使给了 SYS_ADMIN 也禁止 remount，这种情况下只要宿主机已经开启
+# ip_forward 就不影响网关运行——只打警告继续。
 if ! mount -o remount,rw /proc/sys 2>/dev/null; then
-	echo "无法把 /proc/sys remount 成可写，网关将无法开启 IPv4 转发。" >&2
-	echo "请确认 compose 里给了 cap_add: SYS_ADMIN。" >&2
-	exit 1
+	current="$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)"
+	if [ "$current" != "1" ]; then
+		echo "无法把 /proc/sys remount 成可写，且 ip_forward 当前是 $current。" >&2
+		echo "请在宿主机上执行：sudo sysctl -w net.ipv4.ip_forward=1" >&2
+		echo "或在 compose 里加 privileged: true（不推荐）。" >&2
+		exit 1
+	fi
+	echo "警告：/proc/sys 只读，但宿主机已开启 ip_forward，继续启动。" >&2
 fi
 
 # 容器被停掉时把网关也拆干净：mihomo / dnsmasq 进程、nftables 表、ip_forward 都要还原，
