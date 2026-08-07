@@ -1,0 +1,15 @@
+appname         = opensurge
+version         = 0.1.1
+display_name    = OpenSurge
+platform        = x86
+maintainer      = funchs
+maintainer_url  = https://github.com/funchs/opensurge-fnos
+distributor     = funchs
+distributor_url = https://github.com/funchs/opensurge-fnos
+desktop_uidir   = ui
+desktop_applaunchname = opensurge.Application
+service_port    = 61767
+checkport       = false
+desc            = 飞牛 NAS 专版透明代理与智能分流方案，基于 mihomo + dnsmasq + nftables，提供 TUN 模式、DHCP 服务器、DNS 劫持、每设备策略等功能。原生适配 fnOS 网络环境，开箱即用。
+source          = thirdparty
+checksum        =
