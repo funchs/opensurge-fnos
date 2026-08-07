@@ -13,7 +13,7 @@
 镜像同时提供 `linux/amd64` 和 `linux/arm64`，`docker pull` 会自动选对应架构：
 
 ```
-ghcr.io/funchs/opensurge-fnos:v0.1.1             # 推荐：固定版本，多架构
+ghcr.io/funchs/opensurge-fnos:v0.1.2             # 推荐：固定版本，多架构
 ghcr.io/funchs/opensurge-fnos:latest             # 跟着主线走
 ghcr.io/funchs/opensurge-fnos:v0.1.0             # 仅 amd64（多架构支持之前的版本）
 ```
@@ -22,7 +22,7 @@ ghcr.io/funchs/opensurge-fnos:v0.1.0             # 仅 amd64（多架构支持�
 - **arm64** —— 飞牛 ARM 版（瑞芯微 / 全志 / 鲲鹏等），以及**在 Apple Silicon 虚拟机里
   跑 fnOS ARM 做验证**的场景（见文末「先在虚拟机里验证」）
 
-生产环境用 `v0.1.1` 这样的固定版本，别用 `latest`——它会随下次推送变化。
+生产环境用 `v0.1.2` 这样的固定版本，别用 `latest`——它会随下次推送变化。
 
 package 已设为 **public**，NAS 上直接 `docker compose pull` 即可，**不需要登录**。
 
@@ -37,7 +37,7 @@ gh auth refresh -h github.com -s write:packages
 gh auth token | docker login ghcr.io -u funchs --password-stdin
 
 make docker-push                            # 单架构（构建机的架构）
-make docker-push-multiarch VERSION=v0.1.1   # 双架构 + 合并 manifest，并把 latest 指过去
+make docker-push-multiarch VERSION=v0.1.2   # 双架构 + 合并 manifest，并把 latest 指过去
 ```
 
 > **为什么多架构不用 `docker buildx --platform a,b` 一步到位**：buildx 的容器化
@@ -117,7 +117,7 @@ compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 ## 排查
 
 **打开 GUI 提示安全连接过期** —— 用 `/enter`；核对 `lan_ip`；`docker pull` 最新
-`v0.1.1` 后重建容器。详见 [FPK-USER-GUIDE.md §8.1](./FPK-USER-GUIDE.md)。
+`v0.1.2` 后重建容器。详见 [FPK-USER-GUIDE.md §8.1](./FPK-USER-GUIDE.md)。
 
 **`ip_forward` 写入失败** —— compose 里少了 `cap_add: SYS_ADMIN`，或者 fnOS 的 Docker
 版本不允许 remount。容器日志会直接打出提示。

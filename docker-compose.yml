@@ -1,6 +1,6 @@
 services:
   opensurge:
-    image: ${OPENSURGE_IMAGE:-ghcr.io/funchs/opensurge-fnos:v0.1.1}
+    image: ${OPENSURGE_IMAGE:-ghcr.io/funchs/opensurge-fnos:v0.1.2}
     container_name: opensurge
     # 旁路由必须走宿主网络：要看得见真实网卡、要能建 TUN、nftables 规则要作用在宿主上。
     network_mode: host

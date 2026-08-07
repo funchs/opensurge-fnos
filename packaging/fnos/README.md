@@ -9,8 +9,8 @@
 
 ## 快速构建
 
-版本号以 `fnos/manifest` 的 `version` 为准（当前 **0.1.1**），与镜像 tag
-`v0.1.1` **保持一致**（`scripts/build.sh` 会把 compose 里的 `${VERSION}` 替换成同一数字）。
+版本号以 `fnos/manifest` 的 `version` 为准（当前 **0.1.2**），与镜像 tag
+`v0.1.2` **保持一致**（`scripts/build.sh` 会把 compose 里的 `${VERSION}` 替换成同一数字）。
 
 仓库根目录（推荐）：
 
@@ -34,12 +34,12 @@ cd packaging/fnos
 
 | 文件 | 说明 |
 | --- | --- |
-| `opensurge_0.1.1_x86.fpk` | Intel / AMD NAS |
-| `opensurge_0.1.1_arm.fpk` | ARM64 NAS |
+| `opensurge_0.1.2_x86.fpk` | Intel / AMD NAS |
+| `opensurge_0.1.2_arm.fpk` | ARM64 NAS |
 | `app.tgz` | 中间产物，被打进 fpk |
 
-镜像（需另推）：`ghcr.io/funchs/opensurge-fnos:v0.1.1`  
-`make docker-push-multiarch VERSION=v0.1.1`
+镜像（需另推）：`ghcr.io/funchs/opensurge-fnos:v0.1.2`  
+`make docker-push-multiarch VERSION=v0.1.2`
 
 打包是**可复现**的：固定 mtime + `gzip -n`，同样的输入产出同样的字节。
 `app.tgz` 的 MD5 要写进 manifest 的 `checksum`，不固定的话源码没动、重跑一次
@@ -70,7 +70,7 @@ packaging/fnos/
 │   └── meta.env
 ├── build-fpk.sh
 ├── app.tgz
-├── opensurge_0.1.1_*.fpk
+├── opensurge_0.1.2_*.fpk
 ├── INSTALL.md                   # 短版说明（指向 FPK-USER-GUIDE）
 └── README.md                    # 本文件
 ```
