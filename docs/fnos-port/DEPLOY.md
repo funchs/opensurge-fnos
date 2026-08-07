@@ -117,7 +117,7 @@ compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 ## 排查
 
 **打开 GUI 提示安全连接过期** —— 用 `/enter`；核对 `lan_ip`；`docker pull` 最新
-`v0.1.1` 后重建容器。详见 [FPK-USER-GUIDE.md §8.1](./FPK-USER-GUIDE.md)。
+`v0.1.1` 后重建容器。详见 [FPK-USER-GUIDE.md §9.1](./FPK-USER-GUIDE.md)。
 
 **`ip_forward` 写入失败** —— compose 里少了 `cap_add: SYS_ADMIN`，或者 fnOS 的 Docker
 版本不允许 remount。容器日志会直接打出提示。
