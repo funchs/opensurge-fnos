@@ -1,5 +1,6 @@
 .PHONY: test build doctor status policy-control-test
 .PHONY: web-install web-build web-test control-build control-run docker-build docker-push docker-push-multiarch
+.PHONY: fpk fpk-x86 fpk-arm fpk-clean
 .PHONY: lab-install lab-uninstall-root lab-check lab-up lab-status lab-test
 .PHONY: lab-test-tun lab-test-tun-imported-profile lab-test-tun-imported-egress lab-test-tun-local-routing lab-test-tun-device-policy lab-down lab-destroy
 .PHONY: real-device-start-off real-device-start-tun real-device-start-tun-proxy
@@ -69,6 +70,23 @@ docker-push-multiarch:
 	[ "$(VERSION)" = latest ] || docker buildx imagetools create -t $(REPO):latest \
 		$(REPO):$(VERSION)-amd64 $(REPO):$(VERSION)-arm64
 	docker buildx imagetools inspect $(REPO):$(VERSION)
+
+# 飞牛应用中心安装包。版本号取 packaging/fnos/fnos/manifest 的 version，
+# 不从这里的 VERSION 传——manifest 是单一事实来源，镜像 tag 是 v + 同一数字。
+# 详见 packaging/fnos/README.md。
+FPK_DIR := packaging/fnos
+
+fpk:
+	cd $(FPK_DIR) && ./scripts/build.sh && ./build-fpk.sh all
+
+fpk-x86:
+	cd $(FPK_DIR) && ./scripts/build.sh && ./build-fpk.sh x86
+
+fpk-arm:
+	cd $(FPK_DIR) && ./scripts/build.sh && ./build-fpk.sh arm
+
+fpk-clean:
+	rm -f $(FPK_DIR)/app.tgz $(FPK_DIR)/*.fpk
 
 doctor:
 	go run ./cmd/omg doctor --config examples/config.example.yaml
