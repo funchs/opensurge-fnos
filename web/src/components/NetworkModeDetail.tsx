@@ -46,7 +46,7 @@ const modeDetails = {
     change: '准备独立下游网络和接口',
     scope: '连接到下游网络的设备',
     guidance: '上游路由器通常无需改变；OpenSurge 只接管独立下游网络中的设备。',
-    accessibleDescription: 'Mac 使用不同接口连接上游路由器和独立下游网络，并为全部下游设备提供 DHCP、DNS 和默认网关。',
+    accessibleDescription: '网关使用不同接口连接上游路由器和独立下游网络，并为全部下游设备提供 DHCP、DNS 和默认网关。',
   },
 } satisfies Record<NetworkMode, ModeDetail>
 

@@ -164,7 +164,7 @@ describe('OpenSurge app shell', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Web GUI 与 OpenSurge 的安全连接已过期' })).toBeTruthy()
-    expect(screen.getByText('请点击 macOS 菜单栏中的 OpenSurge 图标，然后选择“打开 OpenSurge 面板”。')).toBeTruthy()
+    expect(screen.getByText('请重新访问 OpenSurge Web GUI，或在 NAS 上检查 OpenSurge 服务状态和日志获取新的访问令牌。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
     await waitFor(() => expect(close).toHaveBeenCalled())
   })
