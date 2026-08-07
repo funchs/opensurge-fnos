@@ -1,0 +1,19 @@
+services:
+  opensurge:
+    image: ${DOCKER_MIRROR}ghcr.io/funchs/opensurge-fnos:v0.1.1
+    container_name: opensurge
+    ports:
+      - "${TRIM_SERVICE_PORT}:61767"
+    volumes:
+      - ${TRIM_PKGVAR:?}/config:/config
+      - ${TRIM_PKGVAR:?}/state:/state
+      - ${TRIM_PKGVAR:?}/mihomo-home:/mihomo-home
+      - ${TRIM_PKGVAR:?}/logs:/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - OPENSURGE_ADDR=0.0.0.0:61767
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    network_mode: host
+    restart: unless-stopped
