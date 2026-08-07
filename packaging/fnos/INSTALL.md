@@ -3,9 +3,18 @@
 > **完整用户手册（推荐）**  
 > [docs/fnos-port/FPK-USER-GUIDE.md](../../docs/fnos-port/FPK-USER-GUIDE.md)
 
+## 下载
+
+| 架构 | 安装包 |
+| --- | --- |
+| Intel / AMD | [opensurge_0.1.1_x86.fpk](https://github.com/funchs/opensurge-fnos/releases/download/v0.1.1/opensurge_0.1.1_x86.fpk) |
+| ARM64 | [opensurge_0.1.1_arm.fpk](https://github.com/funchs/opensurge-fnos/releases/download/v0.1.1/opensurge_0.1.1_arm.fpk) |
+
+发布页：<https://github.com/funchs/opensurge-fnos/releases/latest>
+
 ## 一分钟安装
 
-1. 选架构包：`opensurge_0.1.1_x86.fpk` 或 `opensurge_0.1.1_arm.fpk`
+1. 按 NAS 架构下载上表中的 fpk
 2. 飞牛应用中心 → **本地安装**
 3. 向导：端口（默认 61767）、网卡、**NAS 局域网 IP（须与浏览器访问 IP 一致）**
 4. 启动应用
