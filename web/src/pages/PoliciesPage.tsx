@@ -47,7 +47,7 @@ export function PoliciesPage({ overview, onChanged }: { overview: Overview | nul
     {error && <div className="notice warn" role="alert">节点健康暂不可用：{error}</div>}
     <section className="policy-health-list">{filteredGroups.map(group => <PolicyGroupHealthCard key={group.name} group={group} search={search.trim()} healthByName={byName} testing={testing} onTest={test} onSelect={policy => select(group.name, policy)} />)}</section>
     {!filteredGroups.length && <Empty text={groups.length ? '当前筛选没有匹配的策略组或节点' : 'mihomo 未运行或没有可选择的策略组'} />}
-    <p className="evidence-note"><strong>检测范围：</strong>延迟由网关 Mac 上的 mihomo 访问探测地址得到；它不代表某台下游设备的 DHCP、DNS 或 TUN 路径已经完成端到端验收。</p>
+    <p className="evidence-note"><strong>检测范围：</strong>延迟由网关上的 mihomo 访问探测地址得到；它不代表某台下游设备的 DHCP、DNS 或 TUN 路径已经完成端到端验收。</p>
   </>
 }
 
