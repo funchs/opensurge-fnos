@@ -41,9 +41,14 @@ find "${WORK_DIR}" \( -name '._*' -o -name '.DS_Store' \) -delete 2>/dev/null ||
 
 export COPYFILE_DISABLE=1
 export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
-# --no-xattrs：macOS 的 bsdtar 默认把 com.apple.quarantine / provenance 写成
-# pax 扩展头，GNU tar 解包时会刷一堆 "Ignoring unknown extended header keyword"。
-tar czf "${PKG_DIR}/app.tgz" --no-xattrs -C "${WORK_DIR}" docker ui
+
+# app.tgz 的 MD5 要写进 manifest 的 checksum，所以打包必须可复现：
+# 否则源码没动、重跑一次 build 就换个 checksum，让 fpk 产生假 diff。
+# 三个不确定性来源：gzip 的时间戳头、文件 mtime、目录遍历顺序。
+find "${WORK_DIR}" -exec touch -t 202001010000.00 {} +
+# gzip -n 不写时间戳和原文件名；bsdtar/GNU tar 都没有直接开关，所以分两步。
+# --no-xattrs 去掉 macOS 的 com.apple.* pax 头（GNU tar 解包会刷警告）。
+tar cf - --no-xattrs -C "${WORK_DIR}" docker ui | gzip -n9 > "${PKG_DIR}/app.tgz"
 
 echo "Built app.tgz for ${FILE_PREFIX} ${VERSION} (image=v${VERSION})"
 tar tzf "${PKG_DIR}/app.tgz"
