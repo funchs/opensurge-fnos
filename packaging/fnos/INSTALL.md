@@ -4,33 +4,40 @@
 
 ### 方式一：通过飞牛商店本地安装（推荐）
 
-1. **下载镜像**（如果 NAS 无法直接拉取 ghcr.io）
+1. **确认 NAS 架构**
+   - x86 / Intel / AMD → 使用 `opensurge_0.1.1_x86.fpk`
+   - arm64 / 瑞芯微等 → 使用 `opensurge_0.1.1_arm.fpk`
+
+2. **下载镜像**（如果 NAS 无法直接拉取 ghcr.io）
    ```bash
-   # 在有网络的机器上
-   docker pull ghcr.io/funchs/opensurge-fnos:v0.1.1
+   # 在有网络的机器上（按 NAS 架构选 platform）
+   docker pull --platform linux/amd64 ghcr.io/funchs/opensurge-fnos:v0.1.1
+   # 或
+   docker pull --platform linux/arm64 ghcr.io/funchs/opensurge-fnos:v0.1.1
+
    docker save ghcr.io/funchs/opensurge-fnos:v0.1.1 -o opensurge-v0.1.1.tar
    ```
 
-2. **传输文件到 NAS**
-   - 将 `opensurge_0.1.1_all.fpk` 上传到 NAS
+3. **传输文件到 NAS**
+   - 将对应架构的 `.fpk` 上传到 NAS
    - 如需要，将 `opensurge-v0.1.1.tar` 也上传到 NAS
 
-3. **加载 Docker 镜像**（如果在步骤1中导出了 tar）
+4. **加载 Docker 镜像**（如果在步骤 2 中导出了 tar）
    ```bash
    # SSH 登录 NAS
    docker load -i opensurge-v0.1.1.tar
    ```
 
-4. **安装应用**
+5. **安装应用**
    - 打开飞牛商店
    - 点击「本地安装」
-   - 选择 `opensurge_0.1.1_all.fpk`
+   - 选择 `opensurge_0.1.1_x86.fpk` 或 `opensurge_0.1.1_arm.fpk`
    - 按向导配置：
-     - **服务端口**：默认 61767（Web 管理界面）
-     - **配置目录**：存放 mihomo 配置文件，默认 `/volume1/app-data/opensurge/config`
-     - **状态目录**：存放运行时数据，默认 `/volume1/app-data/opensurge/state`
+     - **Web GUI 端口**：默认 `61767`
+     - **网关网卡名**：如 `eth0`（`ip -br link` 可查）
+     - **NAS 局域网 IPv4**：fnOS 系统设置里显示的地址
 
-5. **启动服务**
+6. **启动服务**
    - 安装完成后，在应用列表中启动 OpenSurge
    - 点击应用图标打开 Web 管理界面
 
@@ -42,35 +49,26 @@
 # 解压 fpk
 mkdir opensurge-pkg
 cd opensurge-pkg
-tar xzf ../opensurge_0.1.1_all.fpk
+tar xzf ../opensurge_0.1.1_x86.fpk
 
 # 查看包内容
 ls -la
-# manifest - 应用元数据
-# cmd/main - 启停脚本
-# cmd/service-setup - 安装钩子
-# docker/ - compose 模板和配置示例
-# ui/ - 桌面入口定义
-# wizard - 安装向导配置
-# app.tgz - UI 和 docker 资源包
+# manifest / cmd / config / ui / wizard / OpenSurge.sc / ICON*.PNG / app.tgz
 
-# 手动部署 compose
-mkdir -p /volume1/app-data/opensurge/{config,state}
-cp docker/docker-compose.yaml /volume1/app-data/opensurge/
-cd /volume1/app-data/opensurge
-docker compose up -d
+# app.tgz 含 docker 与 ui，安装时解压到 TRIM_APPDEST
+tar tzf app.tgz
 ```
 
 ## 配置
 
 ### 首次配置
 
-1. 上传 mihomo 配置文件到 `{配置目录}/config.yaml`
-2. 参考 `docker/config.fnos.example.yaml` 调整配置：
-   - `external-controller` 必须监听 `0.0.0.0:61767`
+1. 安装向导会根据网卡名和局域网 IP 种子化 `config.yaml`
+2. 也可手动参考 `docker/config.fnos.example.yaml` 调整：
+   - `external-controller` 监听 `0.0.0.0:61767`（或你改的端口）
    - `secret` 设置 API 认证密钥
    - `tun.enable` 启用 TUN 模式
-   - `dns` 配置 DNS 分流规则
+   - `dns` / `gateway` 与旁路由拓扑一致
 
 ### 客户端设置
 
@@ -81,7 +79,10 @@ OpenSurge 以旁路由网关模式运行，设备需手动配置：
 
 ## 验证
 
-访问 `http://{NAS_IP}:61767/dashboard` 进入 Web 管理界面：
+访问 `http://{NAS_IP}:61767/enter`（端口以向导为准；桌面图标也会打开 `/enter`）。
+直连根路径 `/` 时，Web GUI 会在需要登录时自动跳转到 `/enter` 建立会话。
+
+进入后：
 
 - 查看当前连接的设备
 - 实时监控流量和连接
@@ -95,31 +96,29 @@ OpenSurge 以旁路由网关模式运行，设备需手动配置：
 docker ps | grep opensurge
 
 # 查看日志
-docker logs opensurge-opensurge-1
+docker logs opensurge
 
 # 重启服务
-docker compose -f /volume1/app-data/opensurge/docker-compose.yaml restart
+docker compose -f /var/apps/opensurge/target/docker/docker-compose.yaml restart
+# 实际路径以 fnOS 安装目录为准，常见在 /vol*/@appstore/opensurge 或类似位置
 
 # 验证网络模式
-docker inspect opensurge-opensurge-1 | grep NetworkMode
+docker inspect opensurge | grep NetworkMode
 # 应该显示 "NetworkMode": "host"
 
 # 验证权限
-docker inspect opensurge-opensurge-1 | grep -A5 CapAdd
-# 应该包含 NET_ADMIN 和 SYS_ADMIN
+docker inspect opensurge | grep -A8 CapAdd
+# 应包含 NET_ADMIN / NET_RAW / SYS_ADMIN
 ```
 
 ## 卸载
 
-通过飞牛商店卸载应用会自动停止容器，但不会删除数据目录。如需完全清理：
+通过飞牛商店卸载时，向导可选择是否删除数据目录。默认保留配置与状态，便于重装恢复。
 
 ```bash
-# 删除容器和镜像
-docker compose -f /volume1/app-data/opensurge/docker-compose.yaml down
+# 删除容器和镜像（数据目录按需）
+docker rm -f opensurge 2>/dev/null || true
 docker rmi ghcr.io/funchs/opensurge-fnos:v0.1.1
-
-# 删除数据（谨慎操作）
-rm -rf /volume1/app-data/opensurge
 ```
 
 ## 已知限制
@@ -130,8 +129,8 @@ rm -rf /volume1/app-data/opensurge
 
 ## 技术栈
 
-- mihomo (clash meta core) - 透明代理引擎
-- dnsmasq - DNS 分流
-- nftables - 流量劫持规则
-- React + TypeScript - Web 管理界面
-- Docker host 网络模式 - 直接访问宿主机网络栈
+- mihomo (clash meta core) — 透明代理引擎
+- dnsmasq — DNS 分流
+- nftables — 流量劫持规则
+- React + TypeScript — Web 管理界面
+- Docker host 网络模式 — 直接访问宿主机网络栈

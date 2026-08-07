@@ -73,28 +73,35 @@ cd /vol1/docker/opensurge
 
 ## 四、打开控制面
 
-直接访问 `http://<NAS-IP>:61767` **进不去**：控制面所有 API 都要 session cookie，
-浏览器必须先走一个 `/bootstrap?code=...` 链接去换，而这个链接 **30 秒就过期**。
-容器启动时打印的那一个，等你去看 `docker logs` 早就废了。
+推荐访问：
 
-在 NAS 上现场换一个：
+```text
+http://<NAS-IP>:61767/enter
+```
+
+在 **BaseURL / 局域网模式**下，`/enter` 会校验 Host 后签发 `opensurge_session`
+cookie 并跳到控制台。桌面图标、Docker 容器链接也应指向 `/enter`。
+直接打开 `/` 时，前端若收到 401 会自动再跳一次 `/enter`。
+
+macOS 菜单栏模式（只绑 loopback、无 BaseURL）不开放 `/enter`，仍用菜单栏
+签发的 `/bootstrap?code=...` 一次性链接。
+
+需要手工签发 bootstrap 链接时（调试用）：
 
 ```bash
 ./scripts/fnos-gui-url.sh
 # 输出形如 http://192.168.1.20:61767/bootstrap?code=xxxx —— 30 秒内在浏览器打开
 ```
 
-它的原理是读容器里持久化的 `state/store/control-token`（0600，重启不变），
-用它 POST `/api/v1/session/bootstrap` 签发新链接。
-
 ### 安全边界
 
-- **不是无密码开放**。绑 `0.0.0.0` 只是让局域网能连上；签发会话仍然要
-  `control-token`，拿不到 token 的人连不进去。token 在 `./state/store/control-token`，
-  按普通密钥保管。
-- 仍然**不要把 61767 暴露到公网**——是 HTTP 明文，token 会裸奔。
+- **局域网可信模型**：绑 `0.0.0.0` + 配置了 `OPENSURGE_BASE_URL`（或从
+  `gateway.lan_ip` 推导）时，能访问该 Host 的设备可通过 `/enter` 进入控制台。
+  这是 NAS 旁路由的可用权衡，**不要把 61767 暴露到公网**（HTTP 明文）。
+- control-token 仍用于 `POST /api/v1/session/bootstrap` 等运维接口，存在
+  `state/store/control-token`（0600）。
 - 要更严就把 compose 里的 `OPENSURGE_ADDR` 改回 `127.0.0.1:61767`
-  （同时删掉 `OPENSURGE_BASE_URL`），用 SSH 隧道访问。
+  （并不设 BaseURL），用 SSH 隧道访问。
 
 > 上游只允许控制面绑 loopback，且用监听地址推导 Origin 校验用的 baseURL。
 > 为了让「控制面在 NAS、浏览器在另一台机器」能用，本项目给 `controlapi.Options`
