@@ -151,7 +151,7 @@ describe('OpenSurge app shell', () => {
   })
   afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals() })
 
-  it('stops background updates and explains how to reconnect when authentication expires', async () => {
+  it('redirects to /enter once when authentication expires (fnOS LAN mode)', async () => {
     const close = vi.fn()
     class TestEventSource {
       constructor(_url: string) {}
@@ -159,12 +159,32 @@ describe('OpenSurge app shell', () => {
       close() { close() }
     }
     vi.stubGlobal('EventSource', TestEventSource)
+    const replace = vi.fn()
+    vi.stubGlobal('location', { ...window.location, replace })
+    window.sessionStorage.clear()
+    vi.mocked(api.overview).mockRejectedValueOnce(new RequestError(401, 'authentication_required', 'expired'))
+
+    render(<App />)
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/enter'))
+    expect(window.sessionStorage.getItem('opensurge-enter-attempted')).toBe('1')
+  })
+
+  it('explains how to reconnect when /enter was already attempted', async () => {
+    const close = vi.fn()
+    class TestEventSource {
+      constructor(_url: string) {}
+      addEventListener() {}
+      close() { close() }
+    }
+    vi.stubGlobal('EventSource', TestEventSource)
+    window.sessionStorage.setItem('opensurge-enter-attempted', '1')
     vi.mocked(api.overview).mockRejectedValueOnce(new RequestError(401, 'authentication_required', 'expired'))
 
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Web GUI 与 OpenSurge 的安全连接已过期' })).toBeTruthy()
-    expect(screen.getByText('请重新访问 OpenSurge Web GUI，或在 NAS 上检查 OpenSurge 服务状态和日志获取新的访问令牌。')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '/enter' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
     await waitFor(() => expect(close).toHaveBeenCalled())
   })
