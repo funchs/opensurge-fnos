@@ -1,37 +1,106 @@
 #!/bin/bash
-
-service_postinst() {
-    # 创建数据目录
-    mkdir -p "${TRIM_PKGVAR}/config" 2>/dev/null || true
-    mkdir -p "${TRIM_PKGVAR}/state" 2>/dev/null || true
-    mkdir -p "${TRIM_PKGVAR}/mihomo-home" 2>/dev/null || true
-    mkdir -p "${TRIM_PKGVAR}/logs" 2>/dev/null || true
-
-    # 复制默认配置（如果不存在）
-    if [ ! -f "${TRIM_PKGVAR}/config/config.yaml" ]; then
-        cp "${TRIM_APPDEST}/docker/config.fnos.example.yaml" "${TRIM_PKGVAR}/config/config.yaml" 2>/dev/null || true
-    fi
-}
+# App-specific lifecycle hooks. Sourced by cmd/installer; helpers come from
+# cmd/common.
+#
+# OpenSurge runs on the host network (bypass-gateway mode needs to see the real
+# NIC, create the TUN device and install nftables rules on the host), so the
+# listen port comes from OPENSURGE_ADDR in the compose environment, not from a
+# `ports:` mapping — those are ignored under network_mode: host.
 
 COMPOSE_FILE="${TRIM_APPDEST}/docker/docker-compose.yaml"
+CONFIG_TEMPLATE="${TRIM_APPDEST}/docker/config.fnos.example.yaml"
+CONFIG_DIR="${TRIM_PKGVAR}/config"
+CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 PORT_SAVE="${TRIM_PKGVAR}/.port"
 
-apply_port() {
-    local port="$1"
-    [ -z "$port" ] && return
-    sed -i "s/\"[^\"]*:61767\"/\"${port}:61767\"/" "$COMPOSE_FILE"
-    echo "${port}" > "$PORT_SAVE"
-    install_log "Patched docker-compose.yaml: port=${port}"
+# Render the shipped example config with the NIC name and LAN IP from the
+# wizard. Never overwrite an existing config: the user edits it from the Web GUI
+# and an upgrade must not throw that away.
+seed_config() {
+    mkdir -p "${CONFIG_DIR}" "${TRIM_PKGVAR}/state" 2>/dev/null || true
+
+    if [ -f "${CONFIG_FILE}" ]; then
+        install_log "Config already present, leaving ${CONFIG_FILE} untouched"
+        return 0
+    fi
+    if [ ! -f "${CONFIG_TEMPLATE}" ]; then
+        install_log "Config template missing: ${CONFIG_TEMPLATE}"
+        return 0
+    fi
+
+    cp "${CONFIG_TEMPLATE}" "${CONFIG_FILE}" || return 0
+    apply_network_settings
+    install_log "Seeded ${CONFIG_FILE}"
+    return 0
 }
 
+# Patch gateway.interface / gateway.lan_ip / dns.listen in config.yaml.
+# same_lan (bypass gateway) requires upstream_interface == interface.
+apply_network_settings() {
+    [ -f "${CONFIG_FILE}" ] || return 0
+
+    local iface="${wizard_interface:-}"
+    local lan_ip="${wizard_lan_ip:-}"
+
+    if [ -n "${iface}" ]; then
+        sed -i "s|^\( *interface: *\).*|\1\"${iface}\"|" "${CONFIG_FILE}"
+        sed -i "s|^\( *upstream_interface: *\).*|\1\"${iface}\"|" "${CONFIG_FILE}"
+        install_log "Config interface=${iface}"
+    fi
+    if [ -n "${lan_ip}" ]; then
+        sed -i "s|^\( *lan_ip: *\).*|\1\"${lan_ip}\"|" "${CONFIG_FILE}"
+        sed -i "s|^\( *listen: *\).*|\1\"${lan_ip}\"|" "${CONFIG_FILE}"
+        install_log "Config lan_ip=${lan_ip}"
+    fi
+    return 0
+}
+
+# Rewrite the whole OPENSURGE_ADDR line so this is idempotent whether the value
+# is still the ${TRIM_SERVICE_PORT} placeholder or an already-patched literal.
+apply_port() {
+    local port="$1"
+    [ -n "${port}" ] || return 0
+    if [ -f "${COMPOSE_FILE}" ]; then
+        sed -i "s|^\( *- *OPENSURGE_ADDR=\).*|\10.0.0.0:${port}|" "${COMPOSE_FILE}"
+        install_log "Patched compose: OPENSURGE_ADDR=0.0.0.0:${port}"
+    fi
+    echo "${port}" > "${PORT_SAVE}" 2>/dev/null || true
+    return 0
+}
+
+service_postinst() {
+    seed_config
+    apply_port "${wizard_port:-${TRIM_SERVICE_PORT:-}}"
+}
+
+# app.tgz is re-extracted on upgrade, so the compose file is back to the
+# template and the saved port has to be re-applied.
 service_postupgrade() {
-    if [ -f "$PORT_SAVE" ]; then
-        apply_port "$(cat "$PORT_SAVE")"
+    seed_config
+    if [ -f "${PORT_SAVE}" ]; then
+        apply_port "$(cat "${PORT_SAVE}")"
+    else
+        apply_port "${wizard_port:-${TRIM_SERVICE_PORT:-}}"
     fi
 }
 
 service_postconfig() {
-    if [ -n "${wizard_port:-}" ]; then
-        apply_port "${wizard_port}"
+    apply_port "${wizard_port:-}"
+    apply_network_settings
+}
+
+# var/ survives uninstall by design; only wipe it when the user asked to.
+service_postuninst() {
+    if [ "${wizard_delete_data:-false}" = "true" ]; then
+        case "${TRIM_PKGVAR}" in
+            /vol*|/usr/local/apps/@appdata/*)
+                rm -rf "${TRIM_PKGVAR}" 2>/dev/null || true
+                install_log "Removed app data at ${TRIM_PKGVAR}"
+                ;;
+            *)
+                install_log "Refusing to remove unexpected TRIM_PKGVAR=${TRIM_PKGVAR}"
+                ;;
+        esac
     fi
+    return 0
 }
