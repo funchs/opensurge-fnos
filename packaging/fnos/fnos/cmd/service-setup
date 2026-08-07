@@ -1,37 +1,537 @@
 #!/bin/bash
-
-service_postinst() {
-    # 创建数据目录
-    mkdir -p "${TRIM_PKGVAR}/config" 2>/dev/null || true
-    mkdir -p "${TRIM_PKGVAR}/state" 2>/dev/null || true
-    mkdir -p "${TRIM_PKGVAR}/mihomo-home" 2>/dev/null || true
-    mkdir -p "${TRIM_PKGVAR}/logs" 2>/dev/null || true
-
-    # 复制默认配置（如果不存在）
-    if [ ! -f "${TRIM_PKGVAR}/config/config.yaml" ]; then
-        cp "${TRIM_APPDEST}/docker/config.fnos.example.yaml" "${TRIM_PKGVAR}/config/config.yaml" 2>/dev/null || true
-    fi
-}
+# App-specific lifecycle hooks. Sourced by cmd/installer; helpers come from
+# cmd/common.
+#
+# OpenSurge runs on the host network (bypass-gateway mode needs to see the real
+# NIC, create the TUN device and install nftables rules on the host), so the
+# listen port comes from OPENSURGE_ADDR in the compose environment, not from a
+# `ports:` mapping — those are ignored under network_mode: host.
+#
+# Network fields (wizard_interface / wizard_lan_ip):
+# fnOS wizard JSON is static and cannot run host scripts before the form is
+# shown, so the form always ships non-empty placeholder defaults. After submit:
+#   - empty / "auto" / package placeholders → auto-detect on the NAS
+#   - any other value the user typed → keep as-is
+# Placeholders must stay in sync with wizard/*/initValue.
 
 COMPOSE_FILE="${TRIM_APPDEST}/docker/docker-compose.yaml"
+CONFIG_TEMPLATE="${TRIM_APPDEST}/docker/config.fnos.example.yaml"
+CONFIG_DIR="${TRIM_PKGVAR}/config"
+CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 PORT_SAVE="${TRIM_PKGVAR}/.port"
+NETWORK_SAVE="${TRIM_PKGVAR}/.network"
 
-apply_port() {
-    local port="$1"
-    [ -z "$port" ] && return
-    sed -i "s/\"[^\"]*:61767\"/\"${port}:61767\"/" "$COMPOSE_FILE"
-    echo "${port}" > "$PORT_SAVE"
-    install_log "Patched docker-compose.yaml: port=${port}"
+# Must match wizard/install and wizard/config initValue.
+WIZARD_PLACEHOLDER_INTERFACE="eth0"
+WIZARD_PLACEHOLDER_LAN_IP="192.168.1.20"
+
+# True when the wizard field should be treated as "please auto-detect".
+is_auto_network_value() {
+    local kind="$1"
+    local v
+    v="$(printf '%s' "${2:-}" | tr -d '[:space:]')"
+    case "${v}" in
+        ''|auto|Auto|AUTO) return 0 ;;
+    esac
+    if [ "${kind}" = "interface" ] && [ "${v}" = "${WIZARD_PLACEHOLDER_INTERFACE}" ]; then
+        return 0
+    fi
+    if [ "${kind}" = "lan_ip" ] && [ "${v}" = "${WIZARD_PLACEHOLDER_LAN_IP}" ]; then
+        return 0
+    fi
+    return 1
 }
 
-service_postupgrade() {
-    if [ -f "$PORT_SAVE" ]; then
-        apply_port "$(cat "$PORT_SAVE")"
+# Skip virtual / container / tunnel NICs that are never the LAN gateway NIC.
+is_virtual_iface() {
+    case "${1:-}" in
+        ''|lo|docker*|br-*|veth*|virbr*|tun*|wg*|tailscale*|zt*|fwbr*|fwpr*|fwln*|vmnet*|vnet*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# ---- Detection order (fnOS network settings ≈ NetworkManager) ----
+# 1) nmcli active ethernet/wifi device (closest to 系统设置 → 网络设置)
+# 2) /etc/NetworkManager/system-connections/*.nmconnection
+# 3) ip route / ip addr (kernel live state)
+
+# First connected ethernet, else first connected wifi, via nmcli.
+# Output: device name only.
+detect_iface_via_nmcli() {
+    command -v nmcli >/dev/null 2>&1 || return 0
+
+    local line dev type state
+    # DEVICE:TYPE:STATE:CONNECTION — prefer ethernet over wifi
+    while IFS=: read -r dev type state _; do
+        [ -n "${dev}" ] || continue
+        is_virtual_iface "${dev}" && continue
+        [ "${type}" = "ethernet" ] || continue
+        [ "${state}" = "connected" ] || continue
+        printf '%s' "${dev}"
+        return 0
+    done < <(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null)
+
+    while IFS=: read -r dev type state _; do
+        [ -n "${dev}" ] || continue
+        is_virtual_iface "${dev}" && continue
+        [ "${type}" = "wifi" ] || continue
+        [ "${state}" = "connected" ] || continue
+        printf '%s' "${dev}"
+        return 0
+    done < <(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null)
+
+    return 0
+}
+
+# IPv4 for a device from nmcli (IP4.ADDRESS may be "10.0.0.2/24").
+detect_ipv4_via_nmcli() {
+    local iface="$1" out=""
+    [ -n "${iface}" ] || return 0
+    command -v nmcli >/dev/null 2>&1 || return 0
+
+    # Always succeed under set -e / pipefail: nmcli may exit non-zero.
+    out=$(nmcli -t -f IP4.ADDRESS device show "${iface}" 2>/dev/null | awk -F: '
+        $1 ~ /^IP4\.ADDRESS/ {
+            split($2, a, "/");
+            if (a[1] != "") { print a[1]; exit }
+        }
+    ' || true)
+    printf '%s' "${out}"
+    return 0
+}
+
+# Read interface-name= and address1= from NM connection profiles (persisted
+# settings, same store the fnOS network UI writes to).
+detect_iface_via_nm_files() {
+    local dir="/etc/NetworkManager/system-connections"
+    [ -d "${dir}" ] || return 0
+
+    local f iface method autoconnect best="" best_prio=-99999 prio
+    for f in "${dir}"/*.nmconnection "${dir}"/*; do
+        [ -f "${f}" ] || continue
+        # Skip non-connection files
+        grep -q '^\[connection\]' "${f}" 2>/dev/null || continue
+
+        iface=$(awk -F= '
+            /^\[connection\]/ { in_c=1; next }
+            /^\[/ { in_c=0 }
+            in_c && $1 == "interface-name" { gsub(/\r/, "", $2); print $2; exit }
+        ' "${f}")
+        [ -n "${iface}" ] || continue
+        is_virtual_iface "${iface}" && continue
+
+        method=$(awk -F= '
+            /^\[ipv4\]/ { in_v=1; next }
+            /^\[/ { in_v=0 }
+            in_v && $1 == "method" { gsub(/\r/, "", $2); print $2; exit }
+        ' "${f}")
+        # Ignore deliberately disabled IPv4 profiles
+        [ "${method}" = "disabled" ] && continue
+
+        autoconnect=$(awk -F= '
+            /^\[connection\]/ { in_c=1; next }
+            /^\[/ { in_c=0 }
+            in_c && $1 == "autoconnect" { gsub(/\r/, "", $2); print $2; exit }
+        ' "${f}")
+        [ "${autoconnect}" = "false" ] && continue
+
+        prio=$(awk -F= '
+            /^\[connection\]/ { in_c=1; next }
+            /^\[/ { in_c=0 }
+            in_c && $1 == "autoconnect-priority" { gsub(/\r/, "", $2); print $2; exit }
+        ' "${f}")
+        prio="${prio:-0}"
+        # Prefer higher autoconnect-priority (fnOS often parks unused NICs at -999)
+        if [ -z "${best}" ] || [ "${prio}" -gt "${best_prio}" ] 2>/dev/null; then
+            best="${iface}"
+            best_prio="${prio}"
+        fi
+    done
+
+    printf '%s' "${best}"
+}
+
+detect_ipv4_via_nm_files() {
+    local want_iface="$1"
+    local dir="/etc/NetworkManager/system-connections"
+    [ -n "${want_iface}" ] || return 0
+    [ -d "${dir}" ] || return 0
+
+    local f iface addr
+    for f in "${dir}"/*.nmconnection "${dir}"/*; do
+        [ -f "${f}" ] || continue
+        grep -q '^\[connection\]' "${f}" 2>/dev/null || continue
+
+        iface=$(awk -F= '
+            /^\[connection\]/ { in_c=1; next }
+            /^\[/ { in_c=0 }
+            in_c && $1 == "interface-name" { gsub(/\r/, "", $2); print $2; exit }
+        ' "${f}")
+        [ "${iface}" = "${want_iface}" ] || continue
+
+        # address1=10.211.55.9/24,10.211.55.1  or address1=10.211.55.9/24
+        addr=$(awk -F= '
+            /^\[ipv4\]/ { in_v=1; next }
+            /^\[/ { in_v=0 }
+            in_v && $1 == "address1" {
+                gsub(/\r/, "", $2);
+                split($2, a, "[,/]");
+                print a[1];
+                exit
+            }
+        ' "${f}")
+        if [ -n "${addr}" ]; then
+            printf '%s' "${addr}"
+            return 0
+        fi
+    done
+    return 0
+}
+
+# Kernel fallback: NIC that owns the default IPv4 route.
+detect_iface_via_ip() {
+    local iface="" candidate=""
+    local -a candidates=()
+
+    candidate=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit }
+    }' || true)
+    [ -n "${candidate}" ] && candidates+=("${candidate}")
+
+    while read -r candidate; do
+        [ -n "${candidate}" ] && candidates+=("${candidate}")
+    done < <(ip -4 route show default 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) if ($i == "dev") print $(i + 1)
+    }' || true)
+
+    while read -r candidate; do
+        [ -n "${candidate}" ] && candidates+=("${candidate}")
+    done < <(ip -4 -o addr show scope global 2>/dev/null | awk '{ print $2 }' || true)
+
+    for candidate in "${candidates[@]}"; do
+        is_virtual_iface "${candidate}" && continue
+        if ip link show dev "${candidate}" >/dev/null 2>&1; then
+            iface="${candidate}"
+            break
+        fi
+    done
+
+    printf '%s' "${iface}"
+    return 0
+}
+
+detect_ipv4_via_ip() {
+    local iface="$1" out=""
+    [ -n "${iface}" ] || return 0
+    out=$(ip -4 -o addr show dev "${iface}" scope global 2>/dev/null | awk '{
+        split($4, a, "/"); print a[1]; exit
+    }' || true)
+    printf '%s' "${out}"
+    return 0
+}
+
+# Sets DETECT_IFACE_RESULT / DETECT_IFACE_SOURCE (not stdout — avoids $() subshell
+# losing the source tag, and keeps stdout free of log noise).
+detect_default_interface() {
+    local iface=""
+    DETECT_IFACE_RESULT=""
+    DETECT_IFACE_SOURCE=""
+
+    iface="$(detect_iface_via_nmcli)"
+    if [ -n "${iface}" ]; then
+        DETECT_IFACE_RESULT="${iface}"
+        DETECT_IFACE_SOURCE="nmcli"
+        return 0
     fi
+
+    iface="$(detect_iface_via_nm_files)"
+    if [ -n "${iface}" ]; then
+        DETECT_IFACE_RESULT="${iface}"
+        DETECT_IFACE_SOURCE="NetworkManager-profile"
+        return 0
+    fi
+
+    iface="$(detect_iface_via_ip)"
+    if [ -n "${iface}" ]; then
+        DETECT_IFACE_RESULT="${iface}"
+        DETECT_IFACE_SOURCE="ip-route"
+        return 0
+    fi
+
+    return 0
+}
+
+# Sets DETECT_IP_RESULT / DETECT_IP_SOURCE for the given interface.
+detect_interface_ipv4() {
+    local iface="$1"
+    local ipaddr=""
+    DETECT_IP_RESULT=""
+    DETECT_IP_SOURCE=""
+    [ -n "${iface}" ] || return 0
+
+    ipaddr="$(detect_ipv4_via_nmcli "${iface}")"
+    if [ -n "${ipaddr}" ]; then
+        DETECT_IP_RESULT="${ipaddr}"
+        DETECT_IP_SOURCE="nmcli"
+        return 0
+    fi
+
+    # Live kernel address is preferred over static profile when NM uses DHCP
+    # (profile may only say method=auto without address1=).
+    ipaddr="$(detect_ipv4_via_ip "${iface}")"
+    if [ -n "${ipaddr}" ]; then
+        DETECT_IP_RESULT="${ipaddr}"
+        DETECT_IP_SOURCE="ip-addr"
+        return 0
+    fi
+
+    ipaddr="$(detect_ipv4_via_nm_files "${iface}")"
+    if [ -n "${ipaddr}" ]; then
+        DETECT_IP_RESULT="${ipaddr}"
+        DETECT_IP_SOURCE="NetworkManager-profile"
+        return 0
+    fi
+
+    return 0
+}
+
+# Resolve wizard_interface / wizard_lan_ip: keep real user overrides; replace
+# empty / auto / package placeholders via host detection. Exports the final
+# values so save_wizard_variables persists what was actually applied.
+resolve_network_settings() {
+    local iface="${wizard_interface:-}"
+    local lan_ip="${wizard_lan_ip:-}"
+    local detected_iface="" detected_ip=""
+
+    if is_auto_network_value interface "${iface}"; then
+        detect_default_interface
+        detected_iface="${DETECT_IFACE_RESULT:-}"
+        if [ -n "${detected_iface}" ]; then
+            iface="${detected_iface}"
+            install_log "Auto-detected gateway interface=${iface} (source=${DETECT_IFACE_SOURCE:-unknown})"
+        else
+            # Keep placeholder rather than writing an empty config field.
+            iface="${WIZARD_PLACEHOLDER_INTERFACE}"
+            install_log "WARN: could not auto-detect gateway interface; keeping ${iface}"
+        fi
+    else
+        install_log "Using wizard gateway interface=${iface}"
+    fi
+
+    if is_auto_network_value lan_ip "${lan_ip}"; then
+        if [ -n "${iface}" ]; then
+            detect_interface_ipv4 "${iface}"
+            detected_ip="${DETECT_IP_RESULT:-}"
+        fi
+        if [ -z "${detected_ip}" ]; then
+            # Fallback: any global IPv4 on the host
+            detected_ip=$(ip -4 -o addr show scope global 2>/dev/null | awk '{
+                split($4, a, "/"); print a[1]; exit
+            }' || true)
+            [ -n "${detected_ip}" ] && DETECT_IP_SOURCE="ip-addr-any"
+        fi
+        if [ -n "${detected_ip}" ]; then
+            lan_ip="${detected_ip}"
+            install_log "Auto-detected LAN IPv4=${lan_ip} (source=${DETECT_IP_SOURCE:-unknown})"
+        else
+            lan_ip="${WIZARD_PLACEHOLDER_LAN_IP}"
+            install_log "WARN: could not auto-detect LAN IPv4; keeping ${lan_ip}"
+        fi
+    else
+        install_log "Using wizard LAN IPv4=${lan_ip}"
+    fi
+
+    export wizard_interface="${iface}"
+    export wizard_lan_ip="${lan_ip}"
+
+    # Persist a small side file so upgrades / re-config can re-read last applied.
+    if [ -n "${iface}" ] || [ -n "${lan_ip}" ]; then
+        mkdir -p "${TRIM_PKGVAR}" 2>/dev/null || true
+        {
+            echo "wizard_interface=${iface}"
+            echo "wizard_lan_ip=${lan_ip}"
+        } > "${NETWORK_SAVE}" 2>/dev/null || true
+    fi
+    return 0
+}
+
+# Render the shipped example config with the NIC name and LAN IP from the
+# wizard (or auto-detect). Never overwrite an existing config: the user edits
+# it from the Web GUI and an upgrade must not throw that away.
+seed_config() {
+    mkdir -p "${CONFIG_DIR}" "${TRIM_PKGVAR}/state" 2>/dev/null || true
+
+    if [ -f "${CONFIG_FILE}" ]; then
+        install_log "Config already present, leaving ${CONFIG_FILE} untouched"
+        return 0
+    fi
+    if [ ! -f "${CONFIG_TEMPLATE}" ]; then
+        install_log "Config template missing: ${CONFIG_TEMPLATE}"
+        return 0
+    fi
+
+    cp "${CONFIG_TEMPLATE}" "${CONFIG_FILE}" || return 0
+    apply_network_settings
+    install_log "Seeded ${CONFIG_FILE}"
+    return 0
+}
+
+# Patch gateway.interface / gateway.lan_ip / dns.listen in config.yaml.
+# same_lan (bypass gateway) requires upstream_interface == interface.
+apply_network_settings() {
+    [ -f "${CONFIG_FILE}" ] || return 0
+
+    local iface="${wizard_interface:-}"
+    local lan_ip="${wizard_lan_ip:-}"
+
+    if [ -n "${iface}" ]; then
+        sed -i "s|^\( *interface: *\).*|\1\"${iface}\"|" "${CONFIG_FILE}"
+        sed -i "s|^\( *upstream_interface: *\).*|\1\"${iface}\"|" "${CONFIG_FILE}"
+        install_log "Config interface=${iface}"
+    fi
+    if [ -n "${lan_ip}" ]; then
+        sed -i "s|^\( *lan_ip: *\).*|\1\"${lan_ip}\"|" "${CONFIG_FILE}"
+        sed -i "s|^\( *listen: *\).*|\1\"${lan_ip}\"|" "${CONFIG_FILE}"
+        install_log "Config lan_ip=${lan_ip}"
+    fi
+    return 0
+}
+
+# Rewrite the whole OPENSURGE_ADDR line so this is idempotent whether the value
+# is still the ${TRIM_SERVICE_PORT} placeholder or an already-patched literal.
+apply_port() {
+    local port="$1"
+    [ -n "${port}" ] || return 0
+    if [ -f "${COMPOSE_FILE}" ]; then
+        sed -i "s|^\( *- *OPENSURGE_ADDR=\).*|\10.0.0.0:${port}|" "${COMPOSE_FILE}"
+        install_log "Patched compose: OPENSURGE_ADDR=0.0.0.0:${port}"
+    fi
+    echo "${port}" > "${PORT_SAVE}" 2>/dev/null || true
+    return 0
+}
+
+# Force-refresh package icons after install/upgrade.
+# Desktop uses ui/images (often updates); App Center uses package-root ICON*.PNG
+# and may keep a stale copy (forum #66738). We overwrite every ICON*.PNG /
+# *64*.png / *256*.png we can find under the app install tree.
+force_sync_icons() {
+    local src64="${TRIM_APPDEST}/ui/images/icon-64.png"
+    local src256="${TRIM_APPDEST}/ui/images/icon-256.png"
+    [ -f "${src64}" ] || src64="${TRIM_APPDEST}/ui/images/64.png"
+    [ -f "${src256}" ] || src256="${TRIM_APPDEST}/ui/images/256.png"
+
+    if [ ! -f "${src64}" ] || [ ! -f "${src256}" ]; then
+        install_log "WARN: icon sources missing under ${TRIM_APPDEST}/ui/images"
+        return 0
+    fi
+
+    local -a roots=()
+    if [ -n "${TRIM_APPDEST:-}" ]; then
+        roots+=("$(cd "${TRIM_APPDEST}/.." 2>/dev/null && pwd)")
+        roots+=("${TRIM_APPDEST}")
+    fi
+    if [ -n "${TRIM_APPNAME:-}" ]; then
+        # Real fnOS layout (see fpk-runner / developer guide):
+        #   /vol*/@appcenter/<app>  → package / target (TRIM_APPDEST often here)
+        #   /var/apps/<app>         → meta, etc
+        roots+=("/var/apps/${TRIM_APPNAME}")
+        roots+=("/usr/local/apps/${TRIM_APPNAME}")
+        roots+=("/vol1/@appcenter/${TRIM_APPNAME}")
+        roots+=("/vol2/@appcenter/${TRIM_APPNAME}")
+        roots+=("/volume1/@appcenter/${TRIM_APPNAME}")
+        roots+=("/vol1/@appstore/${TRIM_APPNAME}")
+        roots+=("/vol2/@appstore/${TRIM_APPNAME}")
+        roots+=("/volume1/@appstore/${TRIM_APPNAME}")
+    fi
+
+    local root dest_ui
+    local seen="|"
+    for root in "${roots[@]}"; do
+        [ -n "${root}" ] && [ -d "${root}" ] || continue
+        case "${seen}" in
+            *"|${root}|"*) continue ;;
+        esac
+        seen="${seen}${root}|"
+
+        cp -f "${src64}" "${root}/ICON.PNG" 2>/dev/null && \
+            install_log "Synced ICON.PNG -> ${root}/ICON.PNG" || true
+        cp -f "${src256}" "${root}/ICON_256.PNG" 2>/dev/null && \
+            install_log "Synced ICON_256.PNG -> ${root}/ICON_256.PNG" || true
+
+        dest_ui="${root}/ui/images"
+        if [ -d "${dest_ui}" ] || mkdir -p "${dest_ui}" 2>/dev/null; then
+            cp -f "${src64}" "${dest_ui}/64.png" 2>/dev/null || true
+            cp -f "${src256}" "${dest_ui}/256.png" 2>/dev/null || true
+            cp -f "${src64}" "${dest_ui}/icon-64.png" 2>/dev/null || true
+            cp -f "${src256}" "${dest_ui}/icon-256.png" 2>/dev/null || true
+            install_log "Synced ui/images under ${dest_ui}"
+        fi
+
+        # Overwrite any nested ICON*.PNG the app center may still serve
+        find "${root}" -type f \( -name 'ICON.PNG' -o -name 'ICON_256.PNG' \) 2>/dev/null \
+            | while IFS= read -r p; do
+                case "${p}" in
+                    */ICON.PNG)   cp -f "${src64}" "${p}" 2>/dev/null && install_log "Overwrite ${p}" || true ;;
+                    */ICON_256.PNG) cp -f "${src256}" "${p}" 2>/dev/null && install_log "Overwrite ${p}" || true ;;
+                esac
+            done || true
+    done
+
+    # App-center browser cache is separate; touch a stamp the UI may re-read
+    if [ -n "${TRIM_APPNAME:-}" ]; then
+        local stamp="/var/apps/${TRIM_APPNAME}/etc/.icon-sync"
+        mkdir -p "$(dirname "${stamp}")" 2>/dev/null || true
+        date -u +%Y-%m-%dT%H:%M:%SZ > "${stamp}" 2>/dev/null || true
+        install_log "Icon sync stamp written (hard-refresh browser if App Center still shows old icon)"
+    fi
+    return 0
+}
+
+service_postinst() {
+    resolve_network_settings
+    seed_config
+    apply_port "${wizard_port:-${TRIM_SERVICE_PORT:-}}"
+    force_sync_icons
+}
+
+# app.tgz is re-extracted on upgrade, so the compose file is back to the
+# template and the saved port has to be re-applied.
+service_postupgrade() {
+    # Prefer freshly submitted wizard values; fall back to last saved network.
+    if [ -f "${NETWORK_SAVE}" ]; then
+        load_variables_from_file "${NETWORK_SAVE}"
+    fi
+    resolve_network_settings
+    seed_config
+    if [ -f "${PORT_SAVE}" ]; then
+        apply_port "$(cat "${PORT_SAVE}")"
+    else
+        apply_port "${wizard_port:-${TRIM_SERVICE_PORT:-}}"
+    fi
+    force_sync_icons
 }
 
 service_postconfig() {
-    if [ -n "${wizard_port:-}" ]; then
-        apply_port "${wizard_port}"
+    resolve_network_settings
+    apply_port "${wizard_port:-}"
+    # Config wizard may change NIC/IP after install; patch an existing config.
+    apply_network_settings
+}
+
+# var/ survives uninstall by design; only wipe it when the user asked to.
+service_postuninst() {
+    if [ "${wizard_delete_data:-false}" = "true" ]; then
+        case "${TRIM_PKGVAR}" in
+            /vol*|/usr/local/apps/@appdata/*)
+                rm -rf "${TRIM_PKGVAR}" 2>/dev/null || true
+                install_log "Removed app data at ${TRIM_PKGVAR}"
+                ;;
+            *)
+                install_log "Refusing to remove unexpected TRIM_PKGVAR=${TRIM_PKGVAR}"
+                ;;
+        esac
     fi
+    return 0
 }
