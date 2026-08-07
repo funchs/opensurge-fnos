@@ -16,15 +16,47 @@ type Page = 'dashboard' | 'network' | 'sources' | 'devices' | 'policies' | 'conn
 type Theme = 'dark' | 'light'
 type NetworkNavigationTarget = 'none' | 'control' | 'bottom'
 
+/** Fixed 16×16 stroke icons so sidebar marks share optical size (Unicode glyphs did not). */
+function NavIcon({ id }: { id: Page }) {
+  const common = {
+    viewBox: '0 0 16 16',
+    width: 16,
+    height: 16,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.5,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true as const,
+    focusable: false as const,
+  }
+  switch (id) {
+    case 'dashboard':
+      return <svg {...common}><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="2.5" y="9" width="4.5" height="4.5" rx="1" /><rect x="9" y="9" width="4.5" height="4.5" rx="1" /></svg>
+    case 'network':
+      return <svg {...common}><path d="M2.75 7.25c2.9-2.9 7.6-2.9 10.5 0M4.6 9.4c1.9-1.9 5-1.9 6.9 0" /><circle cx="8" cy="12.1" r="0.85" fill="currentColor" stroke="none" /></svg>
+    case 'sources':
+      return <svg {...common}><circle cx="8" cy="8" r="5.25" /><circle cx="8" cy="8" r="1.75" /></svg>
+    case 'devices':
+      return <svg {...common}><rect x="2.5" y="3.5" width="11" height="7.5" rx="1.25" /><path d="M6 13.5h4M8 11v2.5" /></svg>
+    case 'policies':
+      return <svg {...common}><path d="M3.5 5.5h9M10 3l2.5 2.5L10 8M12.5 10.5h-9M6 8l-2.5 2.5L6 13" /></svg>
+    case 'connectivity':
+      return <svg {...common}><path d="M2.5 6.5c1.6-1.7 3.4-1.7 5 0s3.4 1.7 5 0M2.5 10c1.6-1.7 3.4-1.7 5 0s3.4 1.7 5 0" /></svg>
+    case 'diagnostics':
+      return <svg {...common}><circle cx="7" cy="7" r="4.25" /><path d="m10.2 10.2 3.3 3.3" /></svg>
+  }
+}
+
 const nav = [
-  { id: 'dashboard', label: '总览', icon: '◈' },
-  { id: 'network', label: '网络设置', icon: '⌁' },
-  { id: 'sources', label: '代理与规则源', icon: '◎' },
-  { id: 'devices', label: '设备', icon: '▣' },
-  { id: 'policies', label: '策略', icon: '⇄' },
-  { id: 'connectivity', label: '连通性', icon: '≋' },
-  { id: 'diagnostics', label: '诊断', icon: '⌘' },
-] as const satisfies ReadonlyArray<{ id: Page; label: string; icon: string }>
+  { id: 'dashboard', label: '总览' },
+  { id: 'network', label: '网络设置' },
+  { id: 'sources', label: '代理与规则源' },
+  { id: 'devices', label: '设备' },
+  { id: 'policies', label: '策略' },
+  { id: 'connectivity', label: '连通性' },
+  { id: 'diagnostics', label: '诊断' },
+] as const satisfies ReadonlyArray<{ id: Page; label: string }>
 
 function currentPage(): Page {
   const candidate = window.location.pathname.split('/').filter(Boolean)[0] as Page | undefined
@@ -153,7 +185,7 @@ export function App() {
     <aside className="sidebar">
       <div className="brand"><img className="brand-mark" src="/opensurge-icon.png" alt="" aria-hidden="true" /><div><strong>OpenSurge</strong><small>fnOS Edition</small></div></div>
       <nav aria-label="OpenSurge sections">
-        {nav.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => go(item.id)}><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
+        {nav.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => go(item.id)}><span className="nav-icon" aria-hidden="true"><NavIcon id={item.id} /></span>{item.label}</button>)}
       </nav>
       <button type="button" className="theme-toggle" aria-pressed={theme === 'light'} aria-label={theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'} onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}><span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span>{theme === 'dark' ? '浅色模式' : '深色模式'}</button>
       <div className="sidebar-status"><StatusDot status={overview?.status.gateway ?? 'unreachable'} /><div><strong>{statusLabel(overview?.status.gateway)}</strong><small>{overview?.status.lan_ip || 'Control API'}</small></div></div>
