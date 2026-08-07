@@ -1,0 +1,27 @@
+[
+    {
+        "stepTitle": "卸载 OpenSurge",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "配置文件（config.yaml）、订阅缓存和运行状态都保存在应用数据目录里。选择清除后不可恢复。"
+            },
+            {
+                "type": "radio",
+                "field": "wizard_delete_data",
+                "label": "是否保留 OpenSurge 的配置和数据",
+                "initValue": "false",
+                "options": [
+                    {
+                        "label": "保留现有文件（便于重新安装后恢复）",
+                        "value": "false"
+                    },
+                    {
+                        "label": "清除所有 OpenSurge 数据文件（不可恢复）！！！",
+                        "value": "true"
+                    }
+                ]
+            }
+        ]
+    }
+]
