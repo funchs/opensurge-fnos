@@ -142,7 +142,7 @@ export function App() {
       <div className="sidebar-status"><StatusDot status={overview?.status.gateway ?? 'unreachable'} /><div><strong>{statusLabel(overview?.status.gateway)}</strong><small>{overview?.status.lan_ip || 'Control API'}</small></div></div>
     </aside>
     <main className="workspace">
-      {authenticationRequired ? <section className=”session-expired” role=”alert”><span aria-hidden=”true”>!</span><div><h1>Web GUI 与 OpenSurge 的安全连接已过期</h1><p>请重新访问 OpenSurge Web GUI，或在 NAS 上检查 OpenSurge 服务状态和日志获取新的访问令牌。</p></div></section> : <>
+      {authenticationRequired ? <section className="session-expired" role="alert"><span aria-hidden="true">!</span><div><h1>Web GUI 与 OpenSurge 的安全连接已过期</h1><p>请重新访问 OpenSurge Web GUI，或在 NAS 上检查 OpenSurge 服务状态和日志获取新的访问令牌。</p></div></section> : <>
         {overview?.recovery.required && needsNetworkRecoveryWarning(overview.recovery.stage) && <RecoveryBanner recovery={overview.recovery.stage} onOpen={() => go('network', 'control')} />}
         {error && <div className="error-banner" role="alert"><span>!</span><p>{error}</p><button onClick={() => void refresh()}>重试</button></div>}
         <PageErrorBoundary key={page}>

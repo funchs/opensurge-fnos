@@ -554,22 +554,18 @@ describe('OpenSurge app shell', () => {
     expect(screen.getByRole('button', { name: '将 NAS 切换为固定 IPv4' }).hasAttribute('disabled')).toBe(true)
   })
 
-  it('saves the opt-in macOS HTTP and HTTPS system proxy coordination mode', async () => {
+  // fnOS 版本不提供 macOS 系统代理协同开关（宿主机网络归 fnOS 管），
+  // 这里只覆盖仍然有效的每设备策略开关。
+  it('saves the per-device policy toggle', async () => {
     vi.mocked(api.saveConfig).mockImplementation(async config => ({ ...config, revision: 'updated-revision' }))
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: '网络设置' }))
-    const systemProxy = await screen.findByRole('checkbox', { name: '同时启用 macOS HTTP/HTTPS 系统代理' })
-    expect(systemProxy.hasAttribute('disabled')).toBe(false)
-    expect(screen.getByText(/SafeDNS、DNS Proxy、内容过滤/)).toBeTruthy()
-    expect(screen.getAllByText('已关闭').length).toBeGreaterThanOrEqual(2)
-    await userEvent.click(systemProxy)
-    expect(systemProxy.closest('label')?.classList.contains('is-on')).toBe(true)
-    const devicePolicy = screen.getByRole('checkbox', { name: '启用每设备策略' })
+    expect(screen.queryByRole('checkbox', { name: /macOS HTTP\/HTTPS 系统代理/ })).toBeNull()
+    const devicePolicy = await screen.findByRole('checkbox', { name: '启用每设备策略' })
     await userEvent.click(devicePolicy)
     expect(devicePolicy.closest('label')?.classList.contains('is-on')).toBe(true)
-    expect(screen.getAllByText('已开启').length).toBeGreaterThanOrEqual(2)
     await userEvent.click(screen.getByRole('button', { name: '保存网络配置' }))
-    await waitFor(() => expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ local_system_proxy: { enabled: true }, device_policy: { enabled: true, protected_ipv4: [] } })))
+    await waitFor(() => expect(api.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ device_policy: { enabled: true, protected_ipv4: [] } })))
   })
 
   it('shows the fixed IPv4 readback warning during recovery step 2', async () => {
