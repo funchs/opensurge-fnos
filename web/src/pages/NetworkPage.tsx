@@ -321,12 +321,12 @@ export function NetworkPage({ overview, onChanged, onNavigate }: { overview: Ove
               accessibleLabel="同时启用 macOS HTTP/HTTPS 系统代理"
               checked={config.local_system_proxy.enabled}
               disabled={config.transparent.mode !== 'tun'}
-              disabledText=”需要 TUN”
+              disabledText="需要 TUN"
               onChange={enabled => setConfig({ ...config, local_system_proxy: { ...config.local_system_proxy, enabled } })}
             />
           </ConfigField>
           */}
-          <ConfigField label=”每设备策略” setting=”device_policy.file” hint=”启用后可在”设备”页为 MAC 固定租约及独立 mihomo 策略；若尚无策略文件，保存时会创建一个空文件。关闭后不再使用此策略文件。”>
+          <ConfigField label="每设备策略" setting="device_policy.file" hint="启用后可在“设备”页为 MAC 固定租约及独立 mihomo 策略；若尚无策略文件，保存时会创建一个空文件。关闭后不再使用此策略文件。">
             <ConfigSwitch
               label="启用每设备策略"
               checked={config.device_policy.enabled}
