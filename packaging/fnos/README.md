@@ -54,8 +54,8 @@ macOS 打包时脚本会设 `COPYFILE_DISABLE=1` 并给 tar 传 `--no-xattrs`，
 packaging/fnos/
 ├── fnos/
 │   ├── manifest                 # appname / version / service_port …
-│   ├── ICON.PNG                 # 64×64，应用中心
-│   ├── ICON_256.PNG             # 256×256
+│   ├── ICON.PNG                 # 64×64，圆角 + 四角透明（飞牛规范）
+│   ├── ICON_256.PNG             # 256×256，圆角 + 四角透明
 │   ├── OpenSurge.sc             # 端口转发描述
 │   ├── cmd/                     # 生命周期（含 fix-appcenter-icons）
 │   ├── config/ privilege, resource

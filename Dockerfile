@@ -20,10 +20,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" go build -trimpath -ldflags="-s -w" -o /out/opensurge-control ./cmd/opensurge-control \
-	&& CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" go build -trimpath -ldflags="-s -w" -o /out/omg ./cmd/omg
-
+# mihomo 下载放在 COPY . . 之前：改图标/Web 时不重拉 GitHub，构建会快很多。
+# 国内网络下 GitHub 常慢，--retry-all-errors 覆盖 SSL_ERROR_SYSCALL。
 RUN set -eu; \
 	case "$TARGETARCH" in \
 		amd64) archive="mihomo-linux-amd64-compatible-v${MIHOMO_VERSION}.gz"; sha="$MIHOMO_SHA256_AMD64" ;; \
@@ -31,13 +29,17 @@ RUN set -eu; \
 		*) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
 	esac; \
 	url="https://github.com/MetaCubeX/mihomo/releases/download/v${MIHOMO_VERSION}/${archive}"; \
-	: '--retry-all-errors 才会重试 SSL_ERROR_SYSCALL 这类连接层错误；'; \
-	: '光给 --retry 只覆盖超时和 5xx，而国内到 GitHub 常见的就是连接被打断。'; \
-	curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 \
-		--connect-timeout 20 -o /tmp/mihomo.gz "$url"; \
+	mkdir -p /out; \
+	curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 \
+		--connect-timeout 30 --max-time 300 \
+		-o /tmp/mihomo.gz "$url"; \
 	echo "${sha}  /tmp/mihomo.gz" | sha256sum -c -; \
 	gzip -dc /tmp/mihomo.gz > /out/mihomo; \
 	chmod 0755 /out/mihomo
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" go build -trimpath -ldflags="-s -w" -o /out/opensurge-control ./cmd/opensurge-control \
+	&& CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" go build -trimpath -ldflags="-s -w" -o /out/omg ./cmd/omg
 
 FROM debian:12-slim
 
