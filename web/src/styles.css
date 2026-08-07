@@ -8,7 +8,9 @@ button{cursor:pointer}
 .app-shell{display:grid;grid-template-columns:238px 1fr;min-height:100vh}
 .sidebar{position:fixed;inset:0 auto 0 0;width:238px;padding:28px 18px;border-right:1px solid #20302b;background:#091512cc;backdrop-filter:blur(24px);display:flex;flex-direction:column}
 .brand{display:flex;align-items:center;gap:12px;padding:0 10px 32px}
-.brand-mark{width:42px;height:42px;display:block;object-fit:contain;flex:0 0 auto}
+/* Brand tile mirrors dashboard cards (.gateway-card / light white card) so the mark
+   reads as UI chrome, not a pasted App Store icon. */
+.brand-mark{width:42px;height:42px;display:block;object-fit:contain;flex:0 0 auto;padding:7px;border-radius:12px;border:1px solid #20342d;background:linear-gradient(150deg,#112a21,#0d1b17);box-shadow:0 10px 28px #02090736}
 .brand strong,.brand small{display:block}
 .brand small{color:#71847d;margin-top:2px}
 .sidebar nav{display:grid;gap:6px}
@@ -439,6 +441,7 @@ button{cursor:pointer}
 .router-fallback code{color:inherit;background:#3a311c;border-radius:5px;padding:2px 5px}
 html[data-theme="light"] body{background:radial-gradient(circle at 72% -12%,#ccecdf 0,transparent 34%),#f2f7f4;color:#183028}
 html[data-theme="light"] .sidebar{background:#f7fbf9e8;border-color:#cbded6}
+html[data-theme="light"] .brand-mark{border-color:#cbded6;background:linear-gradient(150deg,#fff,#eef7f2);box-shadow:0 10px 24px #2a594318}
 html[data-theme="light"] .brand small,html[data-theme="light"] .sidebar-status small,html[data-theme="light"] .page-header p,html[data-theme="light"] .gateway-card p,html[data-theme="light"] .metric span,html[data-theme="light"] .section-title p,html[data-theme="light"] .row small,html[data-theme="light"] .config-field small{color:#60776e}
 html[data-theme="light"] .sidebar nav button{color:#536a61}
 html[data-theme="light"] .sidebar nav button:hover,html[data-theme="light"] .sidebar nav button.active{background:#dcece5;color:#17372c}
