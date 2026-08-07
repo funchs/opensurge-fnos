@@ -1,0 +1,5 @@
+#!/bin/bash
+# fnOS 生命周期入口。脚本名即要调用的钩子（basename 派发），
+# 逻辑都在 cmd/common + cmd/service-setup 里。
+. "$(dirname "$0")/installer"
+"$(basename "$0")" > "${TRIM_TEMP_LOGFILE:-/dev/null}" 2>&1
