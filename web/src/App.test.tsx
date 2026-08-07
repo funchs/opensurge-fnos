@@ -192,7 +192,7 @@ describe('OpenSurge app shell', () => {
   it('does not present a saved recovery card as an unfinished network recovery', async () => {
     render(<App />)
     const brandIcon = document.querySelector<HTMLImageElement>('img.brand-mark')
-    expect(brandIcon?.getAttribute('src')).toBe('/opensurge-icon.png')
+    expect(brandIcon?.getAttribute('src')).toBe('/opensurge-mark.svg')
     expect(await screen.findByRole('heading', { name: '全屋网关，一眼可见' })).toBeTruthy()
     const gateway = screen.getByRole('article', { name: '网关状态' })
     expect(within(gateway).getByText('en0 · 192.168.1.20')).toBeTruthy()

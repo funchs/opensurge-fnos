@@ -151,7 +151,7 @@ export function App() {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img className="brand-mark" src="/opensurge-icon.png" alt="" aria-hidden="true" /><div><strong>OpenSurge</strong><small>fnOS Edition</small></div></div>
+      <div className="brand"><img className="brand-mark" src="/opensurge-mark.svg" alt="" aria-hidden="true" /><div><strong>OpenSurge</strong><small>fnOS Edition</small></div></div>
       <nav aria-label="OpenSurge sections">
         {nav.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => go(item.id)}><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
       </nav>
