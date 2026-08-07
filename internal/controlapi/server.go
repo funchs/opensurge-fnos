@@ -216,6 +216,9 @@ func (s *Server) bootstrapURLFor(path string) string {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /bootstrap", s.exchangeBootstrap)
+	// /enter：fnOS / Docker 局域网模式下，浏览器直连 IP:端口时自动签发 session。
+	// macOS loopback 模式（allowedHost 为空）不开放此入口，仍走菜单栏 bootstrap。
+	mux.HandleFunc("GET /enter", s.handleEnter)
 	mux.HandleFunc("POST /api/v1/session/bootstrap", s.handleSessionBootstrap)
 	mux.Handle("GET /api/v1/overview", s.auth(http.HandlerFunc(s.handleOverview)))
 	mux.Handle("GET /api/v1/config", s.auth(http.HandlerFunc(s.handleControlConfig)))
@@ -440,13 +443,32 @@ func (s *Server) exchangeBootstrap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bootstrap link is invalid or expired", http.StatusUnauthorized)
 		return
 	}
+	s.issueWebSession(w, r, grant.path)
+}
+
+// handleEnter issues a browser session without a one-shot bootstrap code.
+// Only available when the control plane is bound for LAN use (BaseURL set):
+// the Host must match allowedHost / loopback, same as securityHeaders.
+// This is what makes "open http://NAS-IP:port" work for fnOS desktop icons.
+func (s *Server) handleEnter(w http.ResponseWriter, r *http.Request) {
+	if s.allowedHost == "" {
+		http.Error(w, "LAN enter is only available when BaseURL is configured", http.StatusUnauthorized)
+		return
+	}
+	// Prefer ?path= for deep links; otherwise land on dashboard.
+	path := allowedWebPath(r.URL.Query().Get("path"))
+	s.issueWebSession(w, r, path)
+}
+
+func (s *Server) issueWebSession(w http.ResponseWriter, r *http.Request, path string) {
+	path = allowedWebPath(path)
 	session := randomToken(32)
 	now := time.Now()
 	s.mu.Lock()
 	s.sessions[session] = now.Add(webSessionIdleTimeout)
 	s.mu.Unlock()
 	setWebSessionCookie(w, session, now)
-	http.Redirect(w, r, "/"+grant.path, http.StatusFound)
+	http.Redirect(w, r, "/"+path, http.StatusFound)
 }
 
 func setWebSessionCookie(w http.ResponseWriter, session string, now time.Time) {
