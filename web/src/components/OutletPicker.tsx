@@ -66,6 +66,6 @@ export function OutletPicker({ open, title, group, healthByName, testing, onTest
       </button>
     })}</div>
     {!options.length && <Empty text="没有匹配的出口" />}
-    <p className="dialog-footnote">{selectable ? '选择 Selector 候选会即时生效。' : '这是自动策略组，候选仅供查看，不能手动选择。'} 延迟由网关 Mac 上的 mihomo 发起探测，只表示节点到检测地址的可达性。</p>
+    <p className="dialog-footnote">{selectable ? '选择 Selector 候选会即时生效。' : '这是自动策略组，候选仅供查看，不能手动选择。'} 延迟由网关上的 mihomo 发起探测，只表示节点到检测地址的可达性。</p>
   </dialog>
 }
