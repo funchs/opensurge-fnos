@@ -6,68 +6,82 @@
 
 ```bash
 cd packaging/fnos
-./build-fpk.sh
+./scripts/build.sh    # 生成 app.tgz（docker + ui）
+./build-fpk.sh        # 默认同时打 x86 / arm 两个包
+# 或只打一个架构：
+# ./build-fpk.sh x86
+# ./build-fpk.sh arm
 ```
 
-生成 `opensurge_0.1.1_all.fpk` (约 41KB)
+产物：
+
+- `opensurge_0.1.1_x86.fpk` — Intel/AMD NAS
+- `opensurge_0.1.1_arm.fpk` — ARM64 NAS（瑞芯微等）
+
+两个 fpk 共享同一份多架构 Docker 镜像（`ghcr.io/funchs/opensurge-fnos:v0.1.1`），差异只在 `manifest` 的 `platform` 字段。
 
 ## 目录结构
 
 ```
 packaging/fnos/
-├── fnos/                           # 应用包内容
-│   ├── manifest                   # 应用元数据
-│   ├── ICON.PNG                   # 128x128 应用图标
-│   ├── ICON_256.PNG               # 256x256 应用图标
-│   ├── cmd/
-│   │   ├── main                   # 启停脚本
-│   │   └── service-setup          # 安装后钩子
+├── fnos/                              # 应用包源内容
+│   ├── manifest                       # 应用元数据
+│   ├── ICON.PNG                       # 90x90 应用图标
+│   ├── ICON_256.PNG                   # 256x256 应用图标
+│   ├── OpenSurge.sc                   # 端口转发描述
+│   ├── cmd/                           # 生命周期脚本（自包含，无外部 shared）
+│   │   ├── main                       # 启停 / status
+│   │   ├── common / installer         # 框架
+│   │   ├── service-setup              # 安装钩子（种子配置、写端口）
+│   │   └── {install,upgrade,config,uninstall}_{init,callback}
+│   ├── config/
+│   │   ├── privilege
+│   │   └── resource                   # docker-project + port-config
 │   ├── docker/
-│   │   ├── docker-compose.yaml    # Compose 模板
-│   │   └── config.fnos.example.yaml  # mihomo 配置示例
+│   │   ├── docker-compose.yaml        # Compose 模板
+│   │   └── config.fnos.example.yaml   # mihomo 配置示例
 │   ├── ui/
-│   │   └── opensurge.Application  # 桌面入口定义
-│   └── wizard                     # 安装向导配置
+│   │   ├── config                     # 桌面入口（opensurge.Application）
+│   │   └── images/{64,256}.png
+│   └── wizard/{install,config,uninstall}
 ├── scripts/
-│   ├── meta.env                   # 构建元数据
-│   └── build.sh                   # app.tgz 构建脚本
-├── build-fpk.sh                   # fpk 打包脚本
-├── app.tgz                        # UI 和 docker 资源包
-├── opensurge_0.1.1_all.fpk        # 最终安装包
-└── INSTALL.md                     # 安装说明
+│   ├── meta.env
+│   └── build.sh                       # 生成 app.tgz
+├── build-fpk.sh                       # 打双平台 fpk
+├── app.tgz                            # 构建产物
+├── opensurge_0.1.1_x86.fpk
+├── opensurge_0.1.1_arm.fpk
+└── INSTALL.md
 ```
 
 ## 工作流程
 
 1. **准备资源**
-   - 编辑 `fnos/manifest` 修改版本号、描述等
-   - 更新 `fnos/docker/docker-compose.yaml` 镜像标签
-   - 修改 `fnos/wizard` 调整安装向导
+   - 改 `fnos/manifest` 版本 / 描述
+   - 改 `fnos/docker/docker-compose.yaml` 镜像与能力
+   - 改 `fnos/wizard/*` 安装向导字段
 
-2. **构建应用包**
+2. **构建**
    ```bash
-   # 构建 app.tgz（包含 docker 和 ui 目录）
    ./scripts/build.sh
-   
-   # 打包成 fpk
-   ./build-fpk.sh
+   ./build-fpk.sh all
    ```
 
 3. **安装测试**
-   - 上传 fpk 到飞牛 NAS
-   - 通过应用商店本地安装
-   - 验证服务启动和 Web 界面
+   - 上传对应架构的 fpk 到飞牛 NAS
+   - 应用商店 → 本地安装
+   - 向导填写端口、网卡名、局域网 IP
+   - 启动后打开 Web GUI
 
 ## 版本发布清单
 
-发布新版本时需要同步修改：
-
-- [ ] `fnos/manifest` - version 字段
-- [ ] `fnos/docker/docker-compose.yaml` - 镜像标签
-- [ ] `scripts/meta.env` - VERSION 变量
-- [ ] `INSTALL.md` - 版本号和更新说明
+- [ ] `fnos/manifest` — version
+- [ ] `fnos/docker/docker-compose.yaml` — 镜像标签（`v${VERSION}` 由 build.sh 替换）
+- [ ] `scripts/meta.env` / `build-fpk.sh` — VERSION
+- [ ] `INSTALL.md` — 版本号
+- [ ] 多架构镜像推送到 `ghcr.io/funchs/opensurge-fnos`
 
 ## 参考
 
-- [conversun/fnos-apps](https://github.com/conversun/fnos-apps) - 官方应用示例
-- fnOS 应用打包规范：fpk 实际上是 tar.gz 格式，包含特定目录结构
+- [conversun/fnos-apps](https://github.com/conversun/fnos-apps) — 官方应用示例与 `scripts/build-fpk.sh`
+- fpk 实际是 tar.gz，根目录含 `manifest` / `app.tgz` / `cmd` / `config` / `ui` / `wizard` / 图标 / `*.sc`
