@@ -53,7 +53,8 @@ shutdown() {
 }
 trap shutdown TERM INT
 
-echo "Web GUI: $OPENSURGE_BASE_URL （用 scripts/fnos-gui-url.sh 换登录链接）"
+echo "Web GUI: $OPENSURGE_BASE_URL/enter （浏览器直连此地址；也可打开 ${OPENSURGE_BASE_URL} 会自动跳转 /enter）"
+echo "若需一次性 bootstrap 链接：scripts/fnos-gui-url.sh"
 
 opensurge-control --direct-root --config "$CONFIG" --addr "$ADDR" \
 	--base-url "$OPENSURGE_BASE_URL" --store "$STORE" &
