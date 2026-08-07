@@ -16,7 +16,7 @@ cd "${SCRIPT_DIR}"
 APP_NAME="opensurge"
 # 读 manifest 版本，避免脚本与 manifest 漂移
 VERSION="$(grep -E '^version[[:space:]]*=' fnos/manifest | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')"
-VERSION="${VERSION:-0.1.1}"
+VERSION="${VERSION:-0.1.3}"
 
 TARGET="${1:-all}"
 case "${TARGET}" in

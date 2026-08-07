@@ -8,12 +8,15 @@ button{cursor:pointer}
 .app-shell{display:grid;grid-template-columns:238px 1fr;min-height:100vh}
 .sidebar{position:fixed;inset:0 auto 0 0;width:238px;padding:28px 18px;border-right:1px solid #20302b;background:#091512cc;backdrop-filter:blur(24px);display:flex;flex-direction:column}
 .brand{display:flex;align-items:center;gap:12px;padding:0 10px 32px}
-.brand-mark{width:42px;height:42px;display:block;object-fit:contain;flex:0 0 auto}
+/* Same asset as favicon / fpk ICON (opensurge-icon.png): full fusion-C mint plate. */
+.brand-mark{width:42px;height:42px;display:block;object-fit:contain;flex:0 0 auto;border-radius:11px;box-shadow:0 8px 20px #02090728}
 .brand strong,.brand small{display:block}
 .brand small{color:#71847d;margin-top:2px}
 .sidebar nav{display:grid;gap:6px}
-.sidebar nav button{border:0;background:transparent;color:#869992;padding:11px 12px;border-radius:10px;text-align:left;display:flex;gap:13px;align-items:center}
-.sidebar nav button span{font-size:18px;width:20px;text-align:center}
+.sidebar nav button{border:0;background:transparent;color:#869992;padding:11px 12px;border-radius:10px;text-align:left;display:flex;gap:12px;align-items:center}
+/* Fixed box + currentColor stroke SVGs keep every nav mark the same optical size. */
+.sidebar nav button .nav-icon{display:inline-grid;place-items:center;flex:0 0 auto;width:20px;height:20px;line-height:0;color:inherit}
+.sidebar nav button .nav-icon svg{display:block;width:16px;height:16px}
 .sidebar nav button:hover,.sidebar nav button.active{background:#162a24;color:#e8f7f0}
 .sidebar nav button.active{box-shadow:inset 2px 0 #79e6b3}
 .sidebar-status{margin-top:auto;border-top:1px solid #1f302b;padding:20px 10px 4px;display:flex;gap:10px;align-items:center}
@@ -439,6 +442,7 @@ button{cursor:pointer}
 .router-fallback code{color:inherit;background:#3a311c;border-radius:5px;padding:2px 5px}
 html[data-theme="light"] body{background:radial-gradient(circle at 72% -12%,#ccecdf 0,transparent 34%),#f2f7f4;color:#183028}
 html[data-theme="light"] .sidebar{background:#f7fbf9e8;border-color:#cbded6}
+html[data-theme="light"] .brand-mark{box-shadow:0 8px 18px #2a594318}
 html[data-theme="light"] .brand small,html[data-theme="light"] .sidebar-status small,html[data-theme="light"] .page-header p,html[data-theme="light"] .gateway-card p,html[data-theme="light"] .metric span,html[data-theme="light"] .section-title p,html[data-theme="light"] .row small,html[data-theme="light"] .config-field small{color:#60776e}
 html[data-theme="light"] .sidebar nav button{color:#536a61}
 html[data-theme="light"] .sidebar nav button:hover,html[data-theme="light"] .sidebar nav button.active{background:#dcece5;color:#17372c}
