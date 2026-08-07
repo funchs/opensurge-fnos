@@ -18,7 +18,8 @@
 
 <div align="center">
   <p>
-    <a href="docs/fnos-port/DEPLOY.md">部署指南</a> ·
+    <a href="docs/fnos-port/FPK-USER-GUIDE.md">飞牛应用中心安装手册</a> ·
+    <a href="docs/fnos-port/DEPLOY.md">Docker 部署指南</a> ·
     <a href="docs/fnos-port/DESIGN.md">移植方案</a> ·
     <a href="#能力">能力</a> ·
     <a href="#每设备策略">每设备策略</a> ·
@@ -56,10 +57,24 @@ DHCP 接管；有独立 AP、SSID 或 VLAN 时，则可以使用独立下游 LAN
 | **独立下游 LAN** | 独立 AP、SSID 或 VLAN | 不改变现有 LAN 的 DHCP；NAS 为独立下游网络提供 DHCP/DNS 和网关 |
 
 - 可导入已有的 mihomo 配置或订阅，保留原有节点、代理组和规则
-- Web GUI 实时展示每台设备的连接、上下行流量和实际出口链；菜单栏随时查看网关状态与恢复提醒。
+- Web GUI 实时展示每台设备的连接、上下行流量和实际出口链
 
 底层由 dnsmasq 提供 DHCP/DNS，mihomo 作为代理引擎，nftables 与 IPv4
 forwarding 提供原生网关路径。
+
+## 在飞牛上安装（推荐）
+
+**普通用户：飞牛应用中心本地安装 `.fpk` 包**
+
+1. 按 NAS 架构选择 `packaging/fnos/opensurge_0.1.1_x86.fpk` 或 `_arm.fpk`
+2. 应用中心 → 本地安装 → 按向导填端口 / 网卡 / 局域网 IP
+3. 启动应用后浏览器打开：`http://<NAS-IP>:61767/enter`
+
+完整步骤、客户端设置、故障排查见  
+**[飞牛应用中心安装使用手册](docs/fnos-port/FPK-USER-GUIDE.md)**。
+
+开发者打 fpk：`packaging/fnos/README.md`。  
+纯 Docker Compose / 推镜像：`docs/fnos-port/DEPLOY.md`。
 
 这个仓库也被有意设计成一个
 [AI Agent 友好工作区](#ai-agent-友好工作区)：项目知识与代码一起版本化，高风险
@@ -82,8 +97,9 @@ forwarding 提供原生网关路径。
 - 在一个控制面中完成订阅导入、网络设置、设备分流、节点健康、连通性检查与诊断；
 - 使用恢复状态机引导局域网 DHCP 接管的启动、客户端验收、停止和网络恢复。
 
-fnOS 部署后，Web GUI 默认在 `http://<NAS-IP>:8080` 提供服务；control-token 在启动日志中输出。
-详见 [fnOS 部署指南](docs/fnos-port/DEPLOY.md)。
+fnOS 部署后，Web GUI 默认在 **`http://<NAS-IP>:61767/enter`**（端口可在安装向导中修改）。
+局域网模式下用 `/enter` 建立会话；不要把控制端口暴露到公网。
+详见 [飞牛应用中心安装手册](docs/fnos-port/FPK-USER-GUIDE.md) 与 [Docker 部署指南](docs/fnos-port/DEPLOY.md)。
 
 **网关与代理**
 
@@ -139,12 +155,16 @@ make control-build
 ./bin/opensurge-control --config examples/config.example.yaml
 ```
 
-交付走 Docker：`make docker-push IMAGE=...`（调试轮次用 `make docker-push-dev`），
-部署步骤见 [fnOS 部署指南](docs/fnos-port/DEPLOY.md)。上游的菜单栏 App 与 Swift
-代码已从本分支删除。
+交付走 Docker 镜像 + 可选 fpk 包装：
 
-fnOS 部署下控制服务监听 `0.0.0.0:8080`，需要 control-token 才能调用（token 在容器
-启动日志中输出）。这是局域网可访问的控制面，请只在可信内网暴露，不要做端口转发。
+- 镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.1`（多架构）
+- 推镜像：`make docker-push-multiarch VERSION=v0.1.1`（调试用 `make docker-push-dev`）
+- 用户安装：见 [飞牛应用中心安装手册](docs/fnos-port/FPK-USER-GUIDE.md)
+- Compose 手工部署：见 [Docker 部署指南](docs/fnos-port/DEPLOY.md)
+
+控制面默认监听 **`0.0.0.0:61767`**（与安装向导端口一致）。局域网模式通过
+`/enter` 签发浏览器 session；运维级 `control-token` 在数据卷
+`state/store/control-token`。请只在可信内网暴露，不要做端口转发。
 架构与安全边界见 [Web GUI 架构](docs/gui-architecture.zh-CN.md)。
 
 Web GUI 内置 applied 配置 + 当前本机模式的连通性页面，并提供 Net.Coffee 的
@@ -240,7 +260,8 @@ go run ./cmd/omg validate-mihomo --config examples/config.imported-profile.examp
 
 ## CLI 使用方式
 
-下面的命令适合开发、自动化和诊断。Docker 部署用户可以通过 Web GUI (`http://nas-ip:8080`) 管理网关。
+下面的命令适合开发、自动化和诊断。Docker / fpk 部署用户可以通过 Web GUI
+（`http://nas-ip:61767/enter`）管理网关。
 
 ### 状态与诊断
 
