@@ -74,6 +74,56 @@ func TestBaseURLSeparatesListenAddressFromBrowserOrigin(t *testing.T) {
 	}
 }
 
+// /enter 在 LAN 模式（BaseURL 已设）下直接签发 session，让浏览器直连 IP:端口可用。
+func TestEnterIssuesSessionWhenBaseURLSet(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/enter", nil)
+	request.Host = "192.168.1.20:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d body=%s", recorder.Code, http.StatusFound, recorder.Body.String())
+	}
+	if loc := recorder.Header().Get("Location"); loc != "/dashboard" {
+		t.Fatalf("Location = %q, want /dashboard", loc)
+	}
+	cookies := recorder.Result().Cookies()
+	if len(cookies) == 0 || cookies[0].Name != "opensurge_session" || cookies[0].Value == "" {
+		t.Fatalf("missing session cookie: %v", cookies)
+	}
+}
+
+func TestEnterRejectedWithoutBaseURL(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "127.0.0.1:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/enter", nil)
+	request.Host = "127.0.0.1:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
 // Host 头校验是防 DNS rebinding 的第二道门。绑到局域网时浏览器发来的 Host 是
 // NAS 的 IP，必须跟着 BaseURL 一起放行，否则连静态页都 403。
 func TestAllowedHostFollowsBaseURL(t *testing.T) {
