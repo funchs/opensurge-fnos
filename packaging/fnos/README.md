@@ -12,13 +12,22 @@
 版本号以 `fnos/manifest` 的 `version` 为准（当前 **0.1.1**），与镜像 tag
 `v0.1.1` **保持一致**（`scripts/build.sh` 会把 compose 里的 `${VERSION}` 替换成同一数字）。
 
+仓库根目录（推荐）：
+
+```bash
+make fpk          # app.tgz + x86 & arm 两个 fpk
+make fpk-x86      # 只出 x86
+make fpk-arm      # 只出 arm
+make fpk-clean    # 删掉 app.tgz 和 *.fpk
+```
+
+或直接在本目录跑：
+
 ```bash
 cd packaging/fnos
 ./scripts/gen-icon.sh    # 可选：从 assets 主图导出 ICON / ui 图标
 ./scripts/build.sh       # 生成 app.tgz（compose + 配置模板 + ui）
 ./build-fpk.sh all       # 生成 x86 + arm 两个 fpk
-# ./build-fpk.sh x86
-# ./build-fpk.sh arm
 ```
 
 产物：
@@ -32,7 +41,12 @@ cd packaging/fnos
 镜像（需另推）：`ghcr.io/funchs/opensurge-fnos:v0.1.1`  
 `make docker-push-multiarch VERSION=v0.1.1`
 
-macOS 打包时脚本会设 `COPYFILE_DISABLE=1`，避免把 `._*` AppleDouble 打进 fpk。
+打包是**可复现**的：固定 mtime + `gzip -n`，同样的输入产出同样的字节。
+`app.tgz` 的 MD5 要写进 manifest 的 `checksum`，不固定的话源码没动、重跑一次
+就会换 checksum，让签入的 fpk 产生假 diff。
+
+macOS 打包时脚本会设 `COPYFILE_DISABLE=1` 并给 tar 传 `--no-xattrs`，
+避免把 `._*` AppleDouble 和 `com.apple.*` 扩展头打进 fpk。
 
 ## 目录结构
 

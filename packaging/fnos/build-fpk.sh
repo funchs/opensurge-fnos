@@ -134,10 +134,13 @@ for PLATFORM in ${PLATFORMS}; do
     # 与 conversun/fnos-apps 一致：在包根目录 tar *，成员名无 ./ 前缀、无 ._*
     (
         cd "${BUILD_DIR}"
+        # 同 scripts/build.sh：固定 mtime + gzip -n，让同样的输入产出同样的字节，
+        # 避免源码没动、重跑一次就给签入的 fpk 造出假 diff。
+        find . -exec touch -t 202001010000.00 {} +
         # --no-xattrs：macOS bsdtar 默认把 com.apple.quarantine / provenance 写成
         # pax 扩展头，GNU tar 解包时会刷一堆 "Ignoring unknown extended header keyword"。
         # shellcheck disable=SC2035
-        tar czf "${SCRIPT_DIR}/${FPK_NAME}" --no-xattrs *
+        tar cf - --no-xattrs * | gzip -n9 > "${SCRIPT_DIR}/${FPK_NAME}"
     )
     rm -rf "${BUILD_DIR}"
 
