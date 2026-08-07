@@ -1,0 +1,132 @@
+#!/bin/bash
+# Shared helpers + fnOS lifecycle entry points for the OpenSurge fnOS package.
+#
+# fnOS calls cmd/{install,uninstall,upgrade,config}_{init,callback}. Each of those
+# is a thin wrapper that sources cmd/installer (which sources this file and
+# cmd/service-setup) and then calls the function named after itself. The actual
+# app-specific work lives in cmd/service-setup as service_* hooks.
+#
+# Deliberately self-contained: no dependency on any distributor's shared
+# framework, so the package builds from this repo alone.
+
+INST_ETC="/var/apps/${TRIM_APPNAME}/etc"
+INST_VARIABLES="${INST_ETC}/installer-variables"
+
+# Wizard fields persisted across install -> upgrade/config so that an upgrade
+# does not lose the port the user picked at install time.
+PERSISTED_WIZARD_KEYS="wizard_port wizard_interface wizard_lan_ip"
+
+# Log to stderr: the wrappers redirect stdout into TRIM_TEMP_LOGFILE, which fnOS
+# surfaces to the user as a dialog. Diagnostics must not land there.
+install_log() {
+    local msg="$*"
+    if [ -z "${msg}" ]; then
+        while IFS=$'\n' read -r line; do
+            install_log "${line}"
+        done
+    else
+        echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t${msg}" 1>&2
+    fi
+}
+
+# Write a user-visible error dialog and fail the step.
+error_exit() {
+    local msg="$1"
+    install_log "ERROR: ${msg}"
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        echo "${msg}" > "${TRIM_TEMP_LOGFILE}"
+    fi
+    exit 1
+}
+
+# Call a hook only if service-setup defined it.
+call_func() {
+    local func="$1"
+    if declare -F "${func}" >/dev/null 2>&1; then
+        install_log "Begin ${func}"
+        "${func}"
+        local rc=$?
+        install_log "End ${func} (rc=${rc})"
+        return ${rc}
+    fi
+    return 0
+}
+
+# Restore persisted wizard values, but never clobber what fnOS exported for this
+# run: a fresh wizard submission must win over the saved copy.
+load_variables_from_file() {
+    local file="$1"
+    [ -n "${file}" ] && [ -r "${file}" ] || return 0
+    local line key value
+    while IFS= read -r line; do
+        case "${line}" in
+            ''|\#*) continue ;;
+        esac
+        key="${line%%=*}"
+        value="${line#*=}"
+        [ -n "${key}" ] || continue
+        if [ -z "${!key:-}" ]; then
+            export "${key}=${value}"
+        fi
+    done < "${file}"
+    return 0
+}
+
+save_wizard_variables() {
+    mkdir -p "${INST_ETC}" 2>/dev/null || true
+    local tmp="${INST_VARIABLES}.tmp"
+    : > "${tmp}" || return 0
+    local key
+    for key in ${PERSISTED_WIZARD_KEYS}; do
+        if [ -n "${!key:-}" ]; then
+            echo "${key}=${!key}" >> "${tmp}"
+        fi
+    done
+    mv -f "${tmp}" "${INST_VARIABLES}" 2>/dev/null || true
+    install_log "Saved wizard variables to ${INST_VARIABLES}"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# fnOS lifecycle entry points
+# ---------------------------------------------------------------------------
+
+install_init() {
+    call_func "service_preinst"
+}
+
+install_callback() {
+    # postinst may auto-detect and export wizard_interface / wizard_lan_ip;
+    # persist after that so installer-variables keeps the resolved values.
+    call_func "service_postinst"
+    save_wizard_variables
+}
+
+upgrade_init() {
+    call_func "service_preupgrade"
+}
+
+upgrade_callback() {
+    call_func "service_postupgrade"
+    call_func "service_restore"
+    save_wizard_variables
+}
+
+config_init() {
+    call_func "service_preconfig"
+}
+
+config_callback() {
+    call_func "service_postconfig"
+    save_wizard_variables
+}
+
+uninstall_init() {
+    call_func "service_preuninst"
+}
+
+uninstall_callback() {
+    call_func "service_postuninst"
+    rm -f "${INST_VARIABLES}" 2>/dev/null || true
+    return 0
+}
