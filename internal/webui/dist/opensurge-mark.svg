@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="os-g" x1="10" y1="14" x2="54" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c5f8e2"/>
+      <stop offset="0.4" stop-color="#79e6b3"/>
+      <stop offset="0.78" stop-color="#3ca67a"/>
+      <stop offset="1" stop-color="#1f5b43"/>
+    </linearGradient>
+  </defs>
+  <!-- Transparent mark for sidebar: stroke ribbons match fusion-C silhouette, UI mint palette. -->
+  <g
+    stroke="url(#os-g)"
+    stroke-width="4.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  >
+    <!-- left horn -->
+    <path d="M15.5 32.5c.4-7.2 3.8-12.4 9.5-14.8"/>
+    <!-- right horn -->
+    <path d="M48.5 32.5c-.4-7.2-3.8-12.4-9.5-14.8"/>
+    <!-- upper flow -->
+    <path d="M19 26.5c5.2-4.2 12.4-5.6 19.2-3 3.2 1.2 5.8 3.2 7.6 5.6"/>
+    <!-- middle flow -->
+    <path d="M17.5 35c4.6-5.6 12-8.2 19.6-6.8 5.4 1 9.8 4.2 12.6 8.4"/>
+    <!-- lower flow + tail -->
+    <path d="M21.5 43.5c4.2-4.2 10.6-6.2 16.6-5 4.6.9 8.4 3.6 10.8 7.2 1.6 2.4 2.8 5.2 3.4 7.8"/>
+  </g>
+</svg>
