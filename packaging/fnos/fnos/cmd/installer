@@ -1,0 +1,15 @@
+#!/bin/bash
+# Sourced by every lifecycle wrapper. Loads helpers, app hooks and any wizard
+# values persisted by a previous install.
+
+COMMON="$(dirname "$0")/common"
+if [ -r "${COMMON}" ]; then
+    . "${COMMON}"
+fi
+
+SVC_SETUP="$(dirname "$0")/service-setup"
+if [ -r "${SVC_SETUP}" ]; then
+    . "${SVC_SETUP}"
+fi
+
+load_variables_from_file "${INST_VARIABLES}"
