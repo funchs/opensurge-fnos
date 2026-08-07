@@ -1,10 +1,9 @@
 <div align="center">
-  <h1>OpenSurge for Mac</h1>
-  <p><strong>把 Mac 变成可按设备分流的 Surge 风格全屋透明代理网关——既可作为旁路由让指定设备手动接入，也支持 DHCP/DNS 自动接管</strong></p>
+  <h1>OpenSurge fnOS Edition</h1>
+  <p><strong>把飞牛 NAS 变成可按设备分流的 Surge 风格全屋透明代理网关——以旁路由形态运行，Docker 交付</strong></p>
   <p>
-    <a href="https://github.com/YTwsy/OpenSurge-for-Mac/releases"><img alt="最新版本" src="https://img.shields.io/github/v/release/YTwsy/OpenSurge-for-Mac?style=flat-square"></a>
-    <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-000000?style=flat-square&amp;logo=apple">
-    <img alt="提供 Apple Silicon 与 Intel 安装包" src="https://img.shields.io/badge/Apple%20Silicon%20%7C%20Intel-packages-6f42c1?style=flat-square&amp;logo=apple">
+    <img alt="fnOS / Debian 12" src="https://img.shields.io/badge/fnOS-Debian%2012-0b8f5f?style=flat-square">
+    <img alt="linux/amd64 与 linux/arm64" src="https://img.shields.io/badge/linux%2Famd64%20%7C%20linux%2Farm64-multiarch-2188ff?style=flat-square&amp;logo=docker">
     <a href="LICENSE"><img alt="GPL-3.0-only" src="https://img.shields.io/badge/license-GPL--3.0--only-2ea44f?style=flat-square"></a>
   </p>
   <p>
@@ -12,28 +11,18 @@
   </p>
 </div>
 
-> ## ⚠️ 这是 fnOS（飞牛 NAS）移植分支
->
-> 本分支把 OpenSurge 的 Go 控制面移植到 **飞牛 NAS（fnOS，Debian 12 底）**，
-> 以**旁路由网关**形态运行，交付形式是 **Docker 镜像**（`linux/amd64`）。
->
-> - **部署看这里** → [fnOS 部署指南](docs/fnos-port/DEPLOY.md)
-> - **移植方案** → [设计文档](docs/fnos-port/DESIGN.md)
->
-> 下面的正文是上游作者写的 macOS 版说明。**涉及 pkg 安装包、菜单栏 App、
-> launchd、pf、networksetup 的部分本分支都不适用**——那些产物已经删除。
-> 网关逻辑、按设备策略、Web GUI 则是共用的，读的时候注意区分。
->
-> 与 macOS 版的行为差异：网卡配置由 fnOS 系统设置管（控制面不修改宿主机网络）、
-> 不接管 DHCP、防火墙走 nftables 而非 pf。
+> **这是 [OpenSurge-for-Mac](https://github.com/YTwsy/OpenSurge-for-Mac) 的 fnOS 移植分支。**
+> 上游是 macOS 应用，本分支把它的 Go 控制面移到飞牛 NAS（fnOS，Debian 12 底）上跑。
+> 网关逻辑、按设备策略、Web GUI 与上游共用；macOS 专属的 pkg 安装包、菜单栏 App、
+> launchd、pf、networksetup 都已删除或换成 Linux 实现。
 
 <div align="center">
   <p>
-    <a href="https://github.com/YTwsy/OpenSurge-for-Mac/releases">下载</a> ·
-    <a href="docs/app-user-guide.zh-CN.md">App 指南</a> ·
+    <a href="docs/fnos-port/DEPLOY.md">部署指南</a> ·
+    <a href="docs/fnos-port/DESIGN.md">移植方案</a> ·
     <a href="#能力">能力</a> ·
     <a href="#每设备策略">每设备策略</a> ·
-    <a href="#web-gui-与菜单栏-app">Web GUI</a> ·
+    <a href="#web-gui">Web GUI</a> ·
     <a href="#ai-agent-友好工作区">Agent 工作区</a>
   </p>
   <table width="100%">
@@ -50,26 +39,26 @@
   </table>
 </div>
 
-OpenSurge for Mac 是一个开源的 Surge 风格 macOS 网关与控制面。多数用户可以先从
-旁路由模式开始：主路由 DHCP 保持开启，只让需要接入的设备使用稳定 IPv4，并把网关和
-DNS 指向 Mac。需要让同一局域网的设备自动接入时，也可以选择局域网 DHCP 接管；有独立
-AP、SSID 或 VLAN 时，则可以使用独立下游 LAN。
+OpenSurge fnOS Edition 是把飞牛 NAS 变成 Surge 风格全屋透明代理网关的开源项目。
+多数用户可以先从旁路由模式开始：主路由 DHCP 保持开启，只让需要接入的设备使用稳定
+IPv4，并把网关和 DNS 指向 NAS。需要让同一局域网的设备自动接入时，也可以选择局域网
+DHCP 接管；有独立 AP、SSID 或 VLAN 时，则可以使用独立下游 LAN。
 
-无论采用哪种模式，你都可以为已登记设备配置不同的出口策略：手机和 Mac 一起走规则
+无论采用哪种模式，你都可以为已登记设备配置不同的出口策略：手机和 NAS 一起走规则
 分流、游戏机连美服、电视走流媒体节点。在局域网 DHCP 接管和独立下游 LAN 模式下，
-接入相应网络的手机、电视、PS5 和 VR 设备，都可以自动从 Mac 获取 DHCP/DNS，无需逐台
+接入相应网络的手机、电视、PS5 和 VR 设备，都可以自动从 NAS 获取 DHCP/DNS，无需逐台
 修改网关和 DNS。
 
 | 模式 | 适合场景 | 对现有网络的影响 |
 | --- | --- | --- |
 | **旁路由模式（常用，推荐首次体验）** | 先接入手机、电视、游戏机等指定设备 | 主路由 DHCP 保持开启；指定设备使用稳定 IPv4，并手工设置网关和 DNS |
 | **局域网 DHCP 接管（进阶 · 自动接入）** | 希望同一 LAN 的设备自动使用 OpenSurge | 需要按引导关闭主路由 DHCP，停止时按恢复流程重新开启 |
-| **独立下游 LAN** | 独立 AP、SSID 或 VLAN | 不改变现有 LAN 的 DHCP；Mac 为独立下游网络提供 DHCP/DNS 和网关 |
+| **独立下游 LAN** | 独立 AP、SSID 或 VLAN | 不改变现有 LAN 的 DHCP；NAS 为独立下游网络提供 DHCP/DNS 和网关 |
 
 - 可导入已有的 mihomo 配置或订阅，保留原有节点、代理组和规则
 - Web GUI 实时展示每台设备的连接、上下行流量和实际出口链；菜单栏随时查看网关状态与恢复提醒。
 
-底层由 dnsmasq 提供 DHCP/DNS，mihomo 作为代理引擎，macOS pf 与 IPv4
+底层由 dnsmasq 提供 DHCP/DNS，mihomo 作为代理引擎，nftables 与 IPv4
 forwarding 提供原生网关路径。
 
 这个仓库也被有意设计成一个
@@ -87,25 +76,22 @@ forwarding 提供原生网关路径。
 
 ## 能力
 
-**友好的 App 体验**
+**通过 Web GUI 管理**
 
-- 通过 macOS 菜单栏 App 随时查看状态、接收网络恢复提醒并打开本地 Web GUI；再次打开
-  `/Applications/OpenSurge.app` 会直接展开与菜单栏图标相同的状态面板；
+- 通过浏览器访问本地 Web GUI，查看状态、接收网络恢复提醒；
 - 在一个控制面中完成订阅导入、网络设置、设备分流、节点健康、连通性检查与诊断；
 - 使用恢复状态机引导局域网 DHCP 接管的启动、客户端验收、停止和网络恢复。
 
-第一次使用请参阅 [OpenSurge for Mac App 使用指南](docs/app-user-guide.zh-CN.md)。遇到常见
-网络、TUN 或设备配置问题时，请参阅 [常见问题](docs/faq.zh-CN.md)。
+fnOS 部署后，Web GUI 默认在 `http://<NAS-IP>:8080` 提供服务；control-token 在启动日志中输出。
+详见 [fnOS 部署指南](docs/fnos-port/DEPLOY.md)。
 
 **网关与代理**
 
-- 启停 DHCP/DNS、mihomo、pf NAT 与 IPv4 forwarding，并带 rollback；
+- 启停 DHCP/DNS、mihomo、nftables NAT 与 IPv4 forwarding，并带 rollback；
 - 通过 mihomo `mixed-port` 提供显式代理；
-- 通过 mihomo TUN 提供 macOS 透明代理；
-- 在不改变下游设备的前提下，为 Mac 本机经 TUN/显式代理的新连接切换
-  **规则 / 全局 / 直连**；默认不修改 macOS 系统代理，也可在 TUN 模式下显式启用
-  HTTP/HTTPS 系统代理协同，兼容 SafeDNS、DNS Proxy 等 Network Extension 干扰
-  TUN-only 本机 DNS 的场景；
+- 通过 mihomo TUN 提供 Linux 透明代理；
+- 在不改变下游设备的前提下，为本机经 TUN/显式代理的新连接切换
+  **规则 / 全局 / 直连**；
 - DHCP 接管模式为带 MAC 的登记设备生成固定 IPv4 租约；旁路由模式（手工网关）
   允许只按主路由侧保持稳定的静态 IPv4 登记设备，MAC 是可选身份信息，两者都可使用
   独立出口策略。
@@ -115,7 +101,7 @@ forwarding 提供原生网关路径。
 - 把活跃会话流量归属到 DHCP 设备或同 LAN 的静态登记/当前观察设备，显示每设备
   连接数、实时上下行速率、累计字节与占主要流量的 mihomo 出口链；
 - 集中检测代理节点可达性/延迟，并从健康视图切换已应用的 Selector；
-- 通过 applied mihomo mixed-port 和当前 Mac 本机模式探测固定真实服务目录，展示
+- 通过 applied mihomo mixed-port 和当前本机模式探测固定真实服务目录，展示
   三轮中位延迟、命中规则与实际出口链；
 - 查看与切换策略组、查看 imported proxy/rule provider 状态、查看当前连接；
 - 输出文本/JSON 形式的 status / doctor / logs / snapshot，并收集允许局部失败的
@@ -130,25 +116,22 @@ forwarding 提供原生网关路径。
 
 一个 mihomo 进程可以对已登记的 LAN 设备应用独立策略。DHCP 接管模式会为带 MAC 的设备
 配置固定 IPv4 租约；旁路由模式只需主路由侧保持稳定的静态 IPv4，MAC 可留空，并可从
-当前经过 Mac 的流量与 ARP 邻居观察辅助登记。切换到 DHCP 模式时，GUI 会要求确认当前
+当前经过网关的流量与 ARP 邻居观察辅助登记。切换到 DHCP 模式时，GUI 会要求确认当前
 可观察到的 MAC；仍无 MAC 的登记会保留，但设备专属策略暂停，补全 MAC 后恢复。当前拓扑中
 身份信息充分的设备会生成各自的 mihomo selector group 和 `SRC-IP-CIDR` 规则。可选 JSON
 策略文件让每台设备要么跟随网关规则，要么在
 全局规则之前走设备专属 selector；它也支持 `REJECT` 这类设备专属动作，以及按
 域名/IP/协议/端口/rule-provider 叠加的规则覆盖。dedicated 模式下，本地/私有目标
-保持直连。Mac 本机的规则 / 全局 / 直连开关不改变这些下游规则；详见
-[Mac 本机流量模式](docs/local-mac-routing.zh-CN.md)。
+保持直连。本机的规则 / 全局 / 直连开关不改变这些下游规则；详见
+[本机流量模式](docs/local-mac-routing.zh-CN.md)。
 
 OpenSurge 有意不内置家庭模板或第三方规则列表；策略内容由操作者提供，空 starter
 文件也是合法配置。JSON 模型、优先级、CLI 命令和验证边界见
 [每设备策略覆盖](docs/device-policy.zh-CN.md)。
 
-## Web GUI 与菜单栏 App
+## Web GUI
 
-通过安装包使用 OpenSurge 时，请从
-[OpenSurge for Mac App 使用指南](docs/app-user-guide.zh-CN.md)开始。
-
-本地 Control API、React Web GUI 和只读 SwiftUI 菜单栏 launcher 已进入仓库。开发构建：
+部署到 fnOS 后直接用浏览器访问，不需要装客户端。开发构建：
 
 ```sh
 make web-install
@@ -156,24 +139,23 @@ make control-build
 ./bin/opensurge-control --config examples/config.example.yaml
 ```
 
-> fnOS 移植版没有菜单栏 App（原 `make menubar-build` 已随 Swift 代码一并删除）。
-> 交付走 Docker：`make docker-push IMAGE=...`，部署见
-> [fnOS 部署指南](docs/fnos-port/DEPLOY.md)。
+交付走 Docker：`make docker-push IMAGE=...`（调试轮次用 `make docker-push-dev`），
+部署步骤见 [fnOS 部署指南](docs/fnos-port/DEPLOY.md)。上游的菜单栏 App 与 Swift
+代码已从本分支删除。
 
-控制服务只监听 `127.0.0.1`，启动时会输出一次性 Web GUI 链接。菜单栏 App 显示
-状态、恢复警报并打开 Web GUI，不提供网关 start/stop 或策略切换。它区分“只退出菜单栏
-App”和“退出 OpenSurge”：后者只在网关数据面已经停止时退出菜单栏 App 与用户级
-Control Service；系统 launchd 托管的 root Helper 保持空闲加载，下次打开无需再次授权。
-菜单栏还提供独立的“卸载 OpenSurge”入口：只要网关已经停止即可通过 macOS 管理员授权
-移除 App、Control Service 与 root Helper，并可选择保留配置数据供以后重新安装或彻底删除。
-架构、安全边界与构建说明见 [Web GUI 与菜单栏 App](docs/gui-architecture.zh-CN.md)。
-Web GUI 内置 applied 配置 + 当前 Mac 本机模式的连通性页面，并提供 Net.Coffee 的
+fnOS 部署下控制服务监听 `0.0.0.0:8080`，需要 control-token 才能调用（token 在容器
+启动日志中输出）。这是局域网可访问的控制面，请只在可信内网暴露，不要做端口转发。
+架构与安全边界见 [Web GUI 架构](docs/gui-architecture.zh-CN.md)。
+
+Web GUI 内置 applied 配置 + 当前本机模式的连通性页面，并提供 Net.Coffee 的
 独立浏览器本机检测入口；两者都不会被描述成下游设备网关规则或 DHCP/DNS/TUN 路径
 已经验收。
 
-> **以下小节属于上游的 macOS 安装包流程，fnOS 移植版不适用。**
-> macOS 打包脚本、launchd plist、pkg 脚本和签名/公证流程已从本分支删除，
-> 本分支只出 Docker 镜像。保留这些文字是为了减小 rebase 上游时的冲突面。
+<details>
+<summary><strong>上游 macOS 安装包流程（fnOS 移植版不适用）</strong></summary>
+
+macOS 打包脚本、launchd plist、pkg 脚本和签名/公证流程已从本分支删除，本分支只出
+Docker 镜像。保留这些文字是为了减小 rebase 上游时的冲突面。
 
 `make gui-installer` 会在取得真实 mihomo、dnsmasq 二进制后构建 macOS 安装包。
 Developer ID 签名和 notarization 必须显式提供发布凭据。GitHub 正式发布同时提供文件名中
@@ -206,14 +188,15 @@ pkg 升级会在同一 LAN DHCP 恢复未完成时拒绝执行。替换 payload 
 卸载 root helper。升级会保留现有配置、导入源、策略数据和 runtime 历史；只有首次安装
 才会用包内示例生成 `config.yaml`。
 
+</details>
+
 ## 透明代理
 
-macOS 上支持的透明代理路径是 TUN。mihomo `redir-port` 和 PF TCP 重定向被
-有意禁用，因为当前 Darwin 构建在运行时报告 redir 不受支持。请保持
-`mihomo.redir_port` 和 `pf.redirect_tcp_to` 为 `0`，并通过
-`transparent.mode: "tun"` 启用透明代理。
+fnOS 移植版使用 TUN 作为透明代理路径。mihomo `redir-port` 和 nftables TCP 重定向暂未启用，
+当前 Linux 构建专注 TUN 模式。请保持 `mihomo.redir_port` 和 `pf.redirect_tcp_to` 为 `0`，
+并通过 `transparent.mode: "tun"` 启用透明代理。
 
-OpenSurge 不会在启动前根据现有 utun 或公网路由猜测冲突。实际启动会等待 mihomo
+OpenSurge 不会在启动前根据现有 TUN 或公网路由猜测冲突。实际启动会等待 mihomo
 运行时确认 TUN ready；失败时给进程短暂清理窗口、回滚网关运行时，并根据实际
 TUN 错误补充冲突路由的接口/网关信息。默认不支持两个全局 TUN 同时占有公网路由。
 
