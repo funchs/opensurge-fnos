@@ -1,20 +1,43 @@
 #!/bin/bash
+# Docker 模式的启停/状态入口。容器生命周期由应用中心跑 compose 管，
+# 所以 start/stop 只需返回 0，真正要实现的是 status。
+#
+# fnOS 约定：status 运行中返回 0、未运行返回 3（不是 1）。
 FILE_PATH="${TRIM_APPDEST}/docker/docker-compose.yaml"
 
-is_docker_running () {
-    DOCKER_NAME=""
-    if [ -f "$FILE_PATH" ]; then
-        DOCKER_NAME=$(cat $FILE_PATH | grep "container_name" | awk -F ':' '{print $2}' | xargs)
-    fi
-    if [ -n "$DOCKER_NAME" ]; then
-        docker inspect $DOCKER_NAME | grep -q "\"Status\": \"running\"," || exit 1
-        return
-    fi
+is_docker_running() {
+    local names name
+    [ -f "$FILE_PATH" ] || return 1
+    names=$(grep "container_name" "$FILE_PATH" | awk -F ':' '{print $2}' | xargs)
+    [ -n "$names" ] || return 1
+
+    # docker 不可用时按"未运行"处理，别让状态轮询以未知错误收场。
+    command -v docker >/dev/null 2>&1 || return 1
+
+    # 多容器编排时全部在跑才算运行中。
+    for name in $names; do
+        docker inspect "$name" 2>/dev/null | grep -q '"Status": "running",' || return 1
+    done
+    return 0
 }
 
 case $1 in
 start) exit 0 ;;
 stop) exit 0 ;;
 status) if is_docker_running; then exit 0; else exit 3; fi ;;
+log)
+    LINES="${2:-100}"
+    if [ -f "$FILE_PATH" ] && command -v docker >/dev/null 2>&1; then
+        for cname in $(grep "container_name" "$FILE_PATH" | awk -F ':' '{print $2}' | xargs); do
+            echo "=== [$cname] ==="
+            docker logs --tail "$LINES" "$cname" 2>&1
+            echo ""
+        done
+    else
+        echo "compose 文件或 docker 不可用：$FILE_PATH"
+        exit 1
+    fi
+    exit 0
+    ;;
 *) exit 1 ;;
 esac

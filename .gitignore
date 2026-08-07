@@ -8,3 +8,4 @@
 /output/playwright/
 /.playwright-cli/
 *.tsbuildinfo
+.DS_Store

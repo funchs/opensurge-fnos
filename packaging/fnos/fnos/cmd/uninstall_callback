@@ -1,0 +1,8 @@
+#!/bin/bash
+# fnOS 生命周期入口。脚本名即要调用的钩子（basename 派发），
+# 逻辑都在 cmd/common + cmd/service-setup 里。
+#
+# 只重定向 stdout：TRIM_TEMP_LOGFILE 非空 + 非 0 退出码会被 fnOS 弹成用户可见
+# 错误框，所以 install_log 的诊断走 stderr，不能 2>&1 混进来。
+. "$(dirname "$0")/installer"
+"$(basename "$0")" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
