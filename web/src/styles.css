@@ -130,6 +130,9 @@ button{cursor:pointer}
 .notice.actionable{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #29483c}
 .notice.actionable p{margin:4px 0 0;color:#82978f}
 .notice.actionable button{flex:0 0 auto;background:#172b25;border:1px solid #2b433b;color:#cbd8d3;border-radius:8px;padding:8px 12px;font-weight:750}
+/* 主行动按钮沿用 .primary 的主色，与页头「检测全部」保持一致；
+   需要 button.primary 才压得过上面 .notice.actionable button 的特异性。 */
+.notice.actionable button.primary{border:0;background:#9af0c7;color:#092019}
 .notice.actionable button:disabled{opacity:.45;cursor:not-allowed}
 .error-banner{display:flex;align-items:center;gap:14px;background:#321a18;border:1px solid #6b3932;margin-bottom:18px}
 .error-banner span{color:#ffad9f;font-weight:800}
