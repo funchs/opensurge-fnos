@@ -66,7 +66,7 @@ forwarding 提供原生网关路径。
 
 **普通用户：飞牛应用中心本地安装 `.fpk` 包**
 
-1. 按 NAS 架构选择 `packaging/fnos/opensurge_0.1.1_x86.fpk` 或 `_arm.fpk`
+1. 按 NAS 架构选择 `packaging/fnos/opensurge_0.1.2_x86.fpk` 或 `_arm.fpk`
 2. 应用中心 → 本地安装 → 按向导填端口 / 网卡 / 局域网 IP
 3. 启动应用后浏览器打开：`http://<NAS-IP>:61767/enter`
 
@@ -157,8 +157,8 @@ make control-build
 
 交付走 Docker 镜像 + 可选 fpk 包装：
 
-- 镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.1`（多架构）
-- 推镜像：`make docker-push-multiarch VERSION=v0.1.1`（调试用 `make docker-push-dev`）
+- 镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.2`（多架构）
+- 推镜像：`make docker-push-multiarch VERSION=v0.1.2`（调试用 `make docker-push-dev`）
 - 用户安装：见 [飞牛应用中心安装手册](docs/fnos-port/FPK-USER-GUIDE.md)
 - Compose 手工部署：见 [Docker 部署指南](docs/fnos-port/DEPLOY.md)
 

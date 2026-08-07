@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/meta.env"
 if [ -z "${VERSION:-}" ] && [ -f "${PKG_DIR}/fnos/manifest" ]; then
     VERSION="$(grep -E '^version[[:space:]]*=' "${PKG_DIR}/fnos/manifest" | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')"
 fi
-VERSION="${VERSION:-0.1.1}"
+VERSION="${VERSION:-0.1.2}"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT

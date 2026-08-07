@@ -5,13 +5,13 @@
 
 ## 一分钟安装
 
-1. 选架构包：`opensurge_0.1.1_x86.fpk` 或 `opensurge_0.1.1_arm.fpk`
+1. 选架构包：`opensurge_0.1.2_x86.fpk` 或 `opensurge_0.1.2_arm.fpk`
 2. 飞牛应用中心 → **本地安装**
 3. 向导：端口（默认 61767）、网卡、**NAS 局域网 IP（须与浏览器访问 IP 一致）**
 4. 启动应用
 5. 浏览器打开：`http://<NAS-IP>:61767/enter`
 
-镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.1`（与 fpk 版本号一致）。  
+镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.2`（与 fpk 版本号一致）。  
 若 NAS 拉不到 ghcr，在可联网机器上 `docker pull` + `docker save`，再在 NAS 上 `docker load`。
 
 ## 旁路由客户端

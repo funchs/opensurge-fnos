@@ -17,7 +17,7 @@
 > This branch ports the OpenSurge Go control plane to **fnOS (Debian 12 based)**,
 > running as a **bypass-router gateway**. Delivery:
 >
-> - Docker image `ghcr.io/funchs/opensurge-fnos:v0.1.1` (`linux/amd64` + `linux/arm64`)
+> - Docker image `ghcr.io/funchs/opensurge-fnos:v0.1.2` (`linux/amd64` + `linux/arm64`)
 > - Optional **fnOS App Center `.fpk`** package (recommended for end users)
 >
 > | Audience | Doc |
