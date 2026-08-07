@@ -1,5 +1,5 @@
 appname         = opensurge
-version         = 0.1.1
+version         = 0.1.3
 display_name    = OpenSurge
 platform        = x86
 maintainer      = funchs

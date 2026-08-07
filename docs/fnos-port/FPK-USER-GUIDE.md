@@ -8,8 +8,8 @@
 | 产品 | OpenSurge fnOS Edition |
 | 形态 | 旁路由透明代理网关（Docker host 网络） |
 | 安装方式 | 飞牛应用中心 → 本地安装（`.fpk`） |
-| 当前版本 | **0.1.1**（fpk 与 Docker 镜像 `v0.1.1` 一致） |
-| 镜像 | `ghcr.io/funchs/opensurge-fnos:v0.1.1`（`linux/amd64` + `linux/arm64`） |
+| 当前版本 | **0.1.3**（fpk 与 Docker 镜像 `v0.1.3` 一致） |
+| 镜像 | `ghcr.io/funchs/opensurge-fnos:v0.1.3`（`linux/amd64` + `linux/arm64`） |
 | Web GUI 默认端口 | **61767** |
 | 推荐入口 | `http://<NAS-IP>:61767/enter` |
 
@@ -34,8 +34,8 @@
 
 | 架构 | 选用安装包 |
 | --- | --- |
-| Intel / AMD（多数 N100、N305 等） | `opensurge_0.1.1_x86.fpk` |
-| ARM64（瑞芯微、部分 ARM 飞牛机型等） | `opensurge_0.1.1_arm.fpk` |
+| Intel / AMD（多数 N100、N305 等） | `opensurge_0.1.3_x86.fpk` |
+| ARM64（瑞芯微、部分 ARM 飞牛机型等） | `opensurge_0.1.3_arm.fpk` |
 
 两个 fpk 内容相同，仅 `manifest` 的 `platform` 字段不同；镜像是多架构的，运行时按 NAS 架构拉对应层。
 
@@ -59,7 +59,7 @@ cd packaging/fnos
 ./build-fpk.sh all       # 生成 x86 + arm 两个 fpk
 ```
 
-产物位于 `packaging/fnos/opensurge_0.1.1_{x86,arm}.fpk`。  
+产物位于 `packaging/fnos/opensurge_0.1.3_{x86,arm}.fpk`。  
 把对应架构的 fpk 拷到能被飞牛网页上传的位置（本机即可）。
 
 ---
@@ -73,7 +73,7 @@ cd packaging/fnos
 安装后容器会按 compose 拉取：
 
 ```text
-ghcr.io/funchs/opensurge-fnos:v0.1.1
+ghcr.io/funchs/opensurge-fnos:v0.1.3
 ```
 
 package 为 public，一般 **无需登录 ghcr**。
@@ -84,23 +84,23 @@ package 为 public，一般 **无需登录 ghcr**。
 
 ```bash
 # 按 NAS 架构二选一
-docker pull --platform linux/amd64 ghcr.io/funchs/opensurge-fnos:v0.1.1
-# docker pull --platform linux/arm64 ghcr.io/funchs/opensurge-fnos:v0.1.1
+docker pull --platform linux/amd64 ghcr.io/funchs/opensurge-fnos:v0.1.3
+# docker pull --platform linux/arm64 ghcr.io/funchs/opensurge-fnos:v0.1.3
 
-docker save ghcr.io/funchs/opensurge-fnos:v0.1.1 -o opensurge-v0.1.1.tar
+docker save ghcr.io/funchs/opensurge-fnos:v0.1.3 -o opensurge-v0.1.3.tar
 ```
 
 传到 NAS 后：
 
 ```bash
-docker load -i opensurge-v0.1.1.tar
+docker load -i opensurge-v0.1.3.tar
 ```
 
 ### 3.2 本地安装 fpk
 
 1. 打开 **飞牛应用中心**
 2. 左下角 **本地安装** / **手动安装**
-3. 选择 `opensurge_0.1.1_x86.fpk` 或 `_arm.fpk`
+3. 选择 `opensurge_0.1.3_x86.fpk` 或 `_arm.fpk`
 4. 按安装向导填写：
 
 | 字段 | 说明 | 建议 |
@@ -221,11 +221,11 @@ http://<NAS-IP>:61767/enter
 ## 6. 升级与重装
 
 1. 应用中心卸载（可选择保留数据）  
-2. 安装新 fpk（版本号与镜像 tag 应一致，当前均为 `0.1.1` / `v0.1.1`）  
+2. 安装新 fpk（版本号与镜像 tag 应一致，当前均为 `0.1.3` / `v0.1.3`）  
 3. 若镜像有更新：
 
    ```bash
-   docker pull ghcr.io/funchs/opensurge-fnos:v0.1.1
+   docker pull ghcr.io/funchs/opensurge-fnos:v0.1.3
    # 然后重启 OpenSurge 容器 / 应用
    ```
 
@@ -254,7 +254,7 @@ http://<NAS-IP>:61767/enter
 
    ```bash
    docker rm -f opensurge 2>/dev/null || true
-   docker rmi ghcr.io/funchs/opensurge-fnos:v0.1.1
+   docker rmi ghcr.io/funchs/opensurge-fnos:v0.1.3
    ```
 
 ---
@@ -269,7 +269,7 @@ http://<NAS-IP>:61767/enter
 | 2 | 确认 `config.yaml` 中 `gateway.lan_ip` = 地址栏 IP |
 | 3 | `docker ps` / `docker logs opensurge` 看容器是否 healthy |
 | 4 | 换无痕窗口，清掉旧 `opensurge_session` cookie |
-| 5 | 镜像是否含 `/enter`：需使用已推送的 `v0.1.1` 新构建，`docker pull` 后再 `up -d` |
+| 5 | 镜像是否含 `/enter`：需使用已推送的 `v0.1.3` 新构建，`docker pull` 后再 `up -d` |
 
 ### 8.2 容器起不来 / 不断重启
 
@@ -314,7 +314,7 @@ ss -lnup | grep -E ':53|:61767'
 安装包结构（简化）：
 
 ```text
-opensurge_0.1.1_x86.fpk   # tar.gz
+opensurge_0.1.3_x86.fpk   # tar.gz
 ├── manifest
 ├── ICON.PNG / ICON_256.PNG      # 应用中心图标
 ├── cmd/                         # 生命周期 + fix-appcenter-icons
@@ -341,7 +341,7 @@ opensurge_0.1.1_x86.fpk   # tar.gz
 ## 11. 快速检查清单
 
 - [ ] 选对 x86 / arm fpk  
-- [ ] 镜像 `v0.1.1` 已 pull 或 docker load  
+- [ ] 镜像 `v0.1.3` 已 pull 或 docker load  
 - [ ] 向导端口、网卡、**lan_ip = 访问 IP**  
 - [ ] 应用已启动，`docker ps` 可见 `opensurge`  
 - [ ] 浏览器打开 `http://<NAS-IP>:61767/enter` 能进总览  
