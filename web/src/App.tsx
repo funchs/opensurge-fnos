@@ -76,8 +76,18 @@ export function App() {
     try {
       setOverview(await api.overview())
       setError('')
+      // 成功拿到数据后清掉「已尝试 /enter」标记，下次 401 还可再进一次
+      try { window.sessionStorage.removeItem('opensurge-enter-attempted') } catch { /* ignore */ }
     } catch (cause) {
       if (cause instanceof RequestError && cause.status === 401) {
+        // fnOS / Docker 局域网模式提供 /enter 自动签发 session；只尝试一次避免死循环
+        try {
+          if (window.sessionStorage.getItem('opensurge-enter-attempted') !== '1') {
+            window.sessionStorage.setItem('opensurge-enter-attempted', '1')
+            window.location.replace('/enter')
+            return
+          }
+        } catch { /* sessionStorage 不可用时退回文案提示 */ }
         setAuthenticationRequired(true)
         setError('')
         return
@@ -88,6 +98,13 @@ export function App() {
 
   useEffect(() => {
     const requireAuthentication = () => {
+      try {
+        if (window.sessionStorage.getItem('opensurge-enter-attempted') !== '1') {
+          window.sessionStorage.setItem('opensurge-enter-attempted', '1')
+          window.location.replace('/enter')
+          return
+        }
+      } catch { /* ignore */ }
       setAuthenticationRequired(true)
       setError('')
     }
@@ -142,7 +159,7 @@ export function App() {
       <div className="sidebar-status"><StatusDot status={overview?.status.gateway ?? 'unreachable'} /><div><strong>{statusLabel(overview?.status.gateway)}</strong><small>{overview?.status.lan_ip || 'Control API'}</small></div></div>
     </aside>
     <main className="workspace">
-      {authenticationRequired ? <section className="session-expired" role="alert"><span aria-hidden="true">!</span><div><h1>Web GUI 与 OpenSurge 的安全连接已过期</h1><p>请重新访问 OpenSurge Web GUI，或在 NAS 上检查 OpenSurge 服务状态和日志获取新的访问令牌。</p></div></section> : <>
+      {authenticationRequired ? <section className="session-expired" role="alert"><span aria-hidden="true">!</span><div><h1>Web GUI 与 OpenSurge 的安全连接已过期</h1><p>请打开 <a href="/enter">/enter</a> 重新建立会话，或在 NAS 上检查 OpenSurge 服务状态与日志。若直连 IP:端口仍失败，确认配置里的 <code>gateway.lan_ip</code> 与浏览器地址一致。</p></div></section> : <>
         {overview?.recovery.required && needsNetworkRecoveryWarning(overview.recovery.stage) && <RecoveryBanner recovery={overview.recovery.stage} onOpen={() => go('network', 'control')} />}
         {error && <div className="error-banner" role="alert"><span>!</span><p>{error}</p><button onClick={() => void refresh()}>重试</button></div>}
         <PageErrorBoundary key={page}>
