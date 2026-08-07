@@ -468,6 +468,10 @@ html[data-theme="light"] .traffic-table code{background:#e6f2ed;color:#2d6752}
 html[data-theme="light"] .traffic-egress{color:#36564a}
 html[data-theme="light"] .notice{background:#e5f1ec;color:#36564a}
 html[data-theme="light"] .notice.warn{border-color:#d8b969;background:#fff4d9;color:#654d19}
+/* .notice 的浅色覆盖只改了底色和文字，actionable 的边框会留在深色值上，
+   这里跟 .section / .gateway-card 用同一个边框色。 */
+html[data-theme="light"] .notice.actionable{border-color:#cbded6}
+html[data-theme="light"] .notice.actionable p{color:#60776e}
 html[data-theme="light"] .cooperative{background:#fff5dc;color:#5e4818}
 html[data-theme="light"] .cooperative p{color:#6d5928}
 html[data-theme="light"] .inventory span,html[data-theme="light"] .row code,html[data-theme="light"] .device-card code{background:#e6f2ed;color:#2d6752}
