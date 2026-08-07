@@ -413,19 +413,40 @@ apply_port() {
 }
 
 # Force-refresh package icons after install/upgrade.
-# Desktop uses ui/images (often updates); App Center uses package-root ICON*.PNG
-# and may keep a stale copy (forum #66738). We overwrite every ICON*.PNG /
-# *64*.png / *256*.png we can find under the app install tree.
+# Desktop uses ui/images; App Center uses package-root ICON*.PNG and often
+# keeps a stale copy even after reinstall of the same version (forum #66738).
+# Prefer fpk-root ICON*.PNG when present, then push them to every install root.
 force_sync_icons() {
-    local src64="${TRIM_APPDEST}/ui/images/icon-64.png"
-    local src256="${TRIM_APPDEST}/ui/images/icon-256.png"
-    [ -f "${src64}" ] || src64="${TRIM_APPDEST}/ui/images/64.png"
-    [ -f "${src256}" ] || src256="${TRIM_APPDEST}/ui/images/256.png"
+    local src64="" src256=""
+    # Prefer package-root icons from the just-installed fpk payload.
+    for cand in \
+        "${TRIM_APPDEST}/ICON.PNG" \
+        "${TRIM_APPDEST}/../ICON.PNG" \
+        "${TRIM_APPDEST}/ui/images/icon-64.png" \
+        "${TRIM_APPDEST}/ui/images/64.png"
+    do
+        if [ -f "${cand}" ]; then
+            src64="${cand}"
+            break
+        fi
+    done
+    for cand in \
+        "${TRIM_APPDEST}/ICON_256.PNG" \
+        "${TRIM_APPDEST}/../ICON_256.PNG" \
+        "${TRIM_APPDEST}/ui/images/icon-256.png" \
+        "${TRIM_APPDEST}/ui/images/256.png"
+    do
+        if [ -f "${cand}" ]; then
+            src256="${cand}"
+            break
+        fi
+    done
 
     if [ ! -f "${src64}" ] || [ ! -f "${src256}" ]; then
-        install_log "WARN: icon sources missing under ${TRIM_APPDEST}/ui/images"
+        install_log "WARN: icon sources missing under ${TRIM_APPDEST}"
         return 0
     fi
+    install_log "Icon sources: 64=$(wc -c <"${src64}" | tr -d ' ')B 256=$(wc -c <"${src256}" | tr -d ' ')B"
 
     local -a roots=()
     if [ -n "${TRIM_APPDEST:-}" ]; then
@@ -433,7 +454,7 @@ force_sync_icons() {
         roots+=("${TRIM_APPDEST}")
     fi
     if [ -n "${TRIM_APPNAME:-}" ]; then
-        # Real fnOS layout (see fpk-runner / developer guide):
+        # Real fnOS layout:
         #   /vol*/@appcenter/<app>  → package / target (TRIM_APPDEST often here)
         #   /var/apps/<app>         → meta, etc
         roots+=("/var/apps/${TRIM_APPNAME}")
@@ -455,9 +476,14 @@ force_sync_icons() {
         esac
         seen="${seen}${root}|"
 
-        cp -f "${src64}" "${root}/ICON.PNG" 2>/dev/null && \
+        # Atomic-ish replace + touch so mtime always advances (helps pickers keyed on mtime)
+        cp -f "${src64}" "${root}/ICON.PNG.tmp" 2>/dev/null && \
+            mv -f "${root}/ICON.PNG.tmp" "${root}/ICON.PNG" 2>/dev/null && \
+            touch "${root}/ICON.PNG" 2>/dev/null && \
             install_log "Synced ICON.PNG -> ${root}/ICON.PNG" || true
-        cp -f "${src256}" "${root}/ICON_256.PNG" 2>/dev/null && \
+        cp -f "${src256}" "${root}/ICON_256.PNG.tmp" 2>/dev/null && \
+            mv -f "${root}/ICON_256.PNG.tmp" "${root}/ICON_256.PNG" 2>/dev/null && \
+            touch "${root}/ICON_256.PNG" 2>/dev/null && \
             install_log "Synced ICON_256.PNG -> ${root}/ICON_256.PNG" || true
 
         dest_ui="${root}/ui/images"
@@ -466,25 +492,44 @@ force_sync_icons() {
             cp -f "${src256}" "${dest_ui}/256.png" 2>/dev/null || true
             cp -f "${src64}" "${dest_ui}/icon-64.png" 2>/dev/null || true
             cp -f "${src256}" "${dest_ui}/icon-256.png" 2>/dev/null || true
+            touch "${dest_ui}/64.png" "${dest_ui}/256.png" \
+                "${dest_ui}/icon-64.png" "${dest_ui}/icon-256.png" 2>/dev/null || true
             install_log "Synced ui/images under ${dest_ui}"
         fi
 
-        # Overwrite any nested ICON*.PNG the app center may still serve
         find "${root}" -type f \( -name 'ICON.PNG' -o -name 'ICON_256.PNG' \) 2>/dev/null \
             | while IFS= read -r p; do
                 case "${p}" in
-                    */ICON.PNG)   cp -f "${src64}" "${p}" 2>/dev/null && install_log "Overwrite ${p}" || true ;;
-                    */ICON_256.PNG) cp -f "${src256}" "${p}" 2>/dev/null && install_log "Overwrite ${p}" || true ;;
+                    */ICON.PNG)
+                        cp -f "${src64}" "${p}" 2>/dev/null && touch "${p}" 2>/dev/null && \
+                            install_log "Overwrite ${p}" || true
+                        ;;
+                    */ICON_256.PNG)
+                        cp -f "${src256}" "${p}" 2>/dev/null && touch "${p}" 2>/dev/null && \
+                            install_log "Overwrite ${p}" || true
+                        ;;
                 esac
             done || true
     done
 
-    # App-center browser cache is separate; touch a stamp the UI may re-read
+    # Best-effort: drop frontend thumbnails / web caches that pin old app icons.
     if [ -n "${TRIM_APPNAME:-}" ]; then
         local stamp="/var/apps/${TRIM_APPNAME}/etc/.icon-sync"
         mkdir -p "$(dirname "${stamp}")" 2>/dev/null || true
-        date -u +%Y-%m-%dT%H:%M:%SZ > "${stamp}" 2>/dev/null || true
-        install_log "Icon sync stamp written (hard-refresh browser if App Center still shows old icon)"
+        {
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            echo "src64_bytes=$(wc -c <"${src64}" | tr -d ' ')"
+            echo "src256_bytes=$(wc -c <"${src256}" | tr -d ' ')"
+        } > "${stamp}" 2>/dev/null || true
+
+        find \
+            /usr/trim/www \
+            /var/cache \
+            /tmp \
+            2>/dev/null \( -iname "*${TRIM_APPNAME}*icon*" -o -iname "*${TRIM_APPNAME}*ICON*" \) \
+            -type f -delete 2>/dev/null || true
+
+        install_log "Icon sync done — if App Center UI still shows the old icon: hard-refresh or reinstall the newer versioned fpk"
     fi
     return 0
 }
