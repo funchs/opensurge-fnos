@@ -3,10 +3,17 @@
 ## 这是什么
 
 把 [OpenSurge-for-Mac](https://github.com/YTwsy/OpenSurge-for-Mac)（GPL-3.0）移植到
-**飞牛 NAS (fnOS，Debian 12 底)**，以旁路由网关形态运行，Docker 交付。
+**飞牛 NAS (fnOS，Debian 12 底)**，以旁路由网关形态运行；Docker 镜像交付，
+并可打成飞牛应用中心 `.fpk`。
 
 **开工前先读 `docs/fnos-port/DESIGN.md`** —— 方案已确认，包含逐步实施计划、
 必须匹配的类型签名、验收标准和已知降级。不要重新设计。
+
+面向用户的文档：
+
+- 应用中心安装 → `docs/fnos-port/FPK-USER-GUIDE.md`
+- Docker 部署 → `docs/fnos-port/DEPLOY.md`
+- fpk 打包（开发） → `packaging/fnos/README.md`
 
 ## 仓库现状
 
