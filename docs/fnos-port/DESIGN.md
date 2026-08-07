@@ -1,7 +1,11 @@
 # OpenSurge for fnOS — 移植设计
 
 > 状态：步骤 1–6 已实施。**先读文末的「实施后的偏差」**——本文有几处设想
-> 在真机上被证伪了，那一节是准的。部署步骤见 [DEPLOY.md](DEPLOY.md)。
+> 在真机上被证伪了，那一节是准的。
+>
+> - **普通用户安装** → [FPK-USER-GUIDE.md](FPK-USER-GUIDE.md)（飞牛应用中心 `.fpk`）
+> - **Docker / 开发部署** → [DEPLOY.md](DEPLOY.md)
+>
 > 上游：https://github.com/YTwsy/OpenSurge-for-Mac (GPL-3.0, 默认分支 `master`)
 > 本项目分支：`fnos-port`
 > Go module：`open-mihomo-gateway`
@@ -9,8 +13,12 @@
 ## 目标
 
 把 OpenSurge 的 Go 控制面 + Web GUI 跑在飞牛 NAS (fnOS，Debian 12 底) 上，
-以 **旁路由网关** 形态提供按设备分流策略、设备发现和实时流量监控，
-交付形式为 Docker 镜像 + `docker-compose.yml`。
+以 **旁路由网关** 形态提供按设备分流策略、设备发现和实时流量监控。
+
+交付形式：
+
+1. **Docker 镜像**（`linux/amd64` + `linux/arm64`）+ compose
+2. **飞牛应用中心 `.fpk` 包**（包装同一镜像与安装向导；推荐终端用户路径）
 
 ### 已确认的三个方向
 
@@ -18,7 +26,7 @@
 |---|---|
 | 范围 | 移植 Go 控制面（保留按设备策略 / 设备发现 / Web GUI） |
 | 网络角色 | 旁路由网关（设备手动指网关 + DNS，不接管 DHCP） |
-| 交付 | Docker 镜像 + compose.yml，从 fnOS「Docker → 项目」导入 |
+| 交付 | Docker 镜像 + compose；可选 fpk 包装进应用中心 |
 
 ### 非目标（明确不做）
 
@@ -295,8 +303,11 @@ services:
 
 解法：给 `controlapi.Options` 加可选的 `BaseURL`（浏览器看到的地址），
 **不填时行为和上游完全一致**，填了才放行非 loopback 绑定，并把它的主机名
-加入 Host 白名单。这是本次唯一改到上游共享文件的地方（约 15 行，加法式）。
-测试见 `internal/controlapi/baseurl_test.go`。
+加入 Host 白名单。entrypoint 从 `gateway.lan_ip` 推导 BaseURL。
+后续补充 **`GET /enter`**：在 BaseURL / 局域网模式下校验 Host 后签发
+`opensurge_session` cookie 并跳转控制台（日常入口，不必每次 bootstrap）。
+测试见 `internal/controlapi/baseurl_test.go`。用户文档见
+[FPK-USER-GUIDE.md](FPK-USER-GUIDE.md) 与 [DEPLOY.md](DEPLOY.md)。
 
 ### 2. dnsmasq 必须装进镜像
 

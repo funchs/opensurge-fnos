@@ -15,20 +15,26 @@
 > ## ⚠️ This is the fnOS (FeiNiu NAS) port
 >
 > This branch ports the OpenSurge Go control plane to **fnOS (Debian 12 based)**,
-> running as a **bypass-router gateway** and shipped as a **Docker image**
-> (`linux/amd64`).
+> running as a **bypass-router gateway**. Delivery:
 >
-> - **To deploy** → [fnOS deployment guide](docs/fnos-port/DEPLOY.md)
-> - **Port design** → [design document](docs/fnos-port/DESIGN.md)
+> - Docker image `ghcr.io/funchs/opensurge-fnos:v0.1.1` (`linux/amd64` + `linux/arm64`)
+> - Optional **fnOS App Center `.fpk`** package (recommended for end users)
 >
-> Everything below is upstream's macOS documentation. **Anything about the pkg
-> installer, menu bar app, launchd, pf, or networksetup does not apply here** —
-> those artifacts were deleted. The gateway logic, per-device policy, and Web GUI
-> are shared.
+> | Audience | Doc |
+> | --- | --- |
+> | App Center install (`.fpk`) | **[FPK user guide (中文)](docs/fnos-port/FPK-USER-GUIDE.md)** |
+> | Docker Compose / SSH | [DEPLOY.md](docs/fnos-port/DEPLOY.md) |
+> | Port design | [DESIGN.md](docs/fnos-port/DESIGN.md) |
 >
-> Behavioral differences from the macOS build: interface configuration belongs to
-> fnOS system settings (the control plane never modifies host networking), DHCP is
-> not taken over, and the firewall is nftables rather than pf.
+> Web GUI (LAN): `http://<NAS-IP>:61767/enter` — use `/enter` to establish a session.
+>
+> Everything below is largely upstream macOS documentation. **pkg installer, menu
+> bar app, launchd, pf, and networksetup do not apply here** — those artifacts
+> were removed. Gateway logic, per-device policy, and Web GUI are shared.
+>
+> Differences from macOS: host NIC config is managed by fnOS system settings
+> (`ErrManagedByFnOS`); DHCP takeover is not the default fnOS path; firewall is
+> nftables instead of pf.
 
 <div align="center">
   <p>
