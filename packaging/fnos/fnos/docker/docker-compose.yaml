@@ -1,19 +1,22 @@
 services:
   opensurge:
-    image: ${DOCKER_MIRROR}ghcr.io/funchs/opensurge-fnos:v0.1.1
+    image: ${DOCKER_MIRROR}ghcr.io/funchs/opensurge-fnos:v${VERSION}
     container_name: opensurge
-    ports:
-      - "${TRIM_SERVICE_PORT}:61767"
-    volumes:
-      - ${TRIM_PKGVAR:?}/config:/config
-      - ${TRIM_PKGVAR:?}/state:/state
-      - ${TRIM_PKGVAR:?}/mihomo-home:/mihomo-home
-      - ${TRIM_PKGVAR:?}/logs:/logs
-    environment:
-      - TZ=Asia/Shanghai
-      - OPENSURGE_ADDR=0.0.0.0:61767
+    # 旁路由必须走宿主网络：要看得见真实网卡、要能建 TUN、nftables 规则要作用在宿主上。
+    # host 网络下 ports: 映射无效，监听端口由 OPENSURGE_ADDR 决定。
+    network_mode: host
     cap_add:
       - NET_ADMIN
+      - NET_RAW
+      # 只为把 /proc/sys remount 成可写——Docker 默认挂只读，网关要写
+      # net.ipv4.ip_forward。host 网络下不能用 sysctls:，privileged 又太宽。
       - SYS_ADMIN
-    network_mode: host
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ${TRIM_PKGVAR:?}/config:/etc/opensurge
+      - ${TRIM_PKGVAR:?}/state:/var/lib/opensurge
+    environment:
+      - TZ=Asia/Shanghai
+      - OPENSURGE_ADDR=0.0.0.0:${TRIM_SERVICE_PORT}
     restart: unless-stopped

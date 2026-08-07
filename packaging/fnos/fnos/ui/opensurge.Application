@@ -1,6 +1,0 @@
-[opensurge.Application]
-Version=1
-Title=OpenSurge
-Icon=ICON.PNG
-Url=http://${TRIM_HOST_IP}:${TRIM_SERVICE_PORT}/dashboard
-Type=url
