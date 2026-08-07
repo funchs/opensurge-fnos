@@ -1,0 +1,15 @@
+{
+    ".url": {
+        "opensurge.Application":
+        {
+            "title": "OpenSurge",
+            "desc": "透明代理与智能分流网关",
+            "icon": "images/icon-{0}.png",
+            "type": "url",
+            "port": "61767",
+            "protocol": "http",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}
