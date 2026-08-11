@@ -408,6 +408,19 @@ apply_port() {
         sed -i "s|^\( *- *OPENSURGE_ADDR=\).*|\10.0.0.0:${port}|" "${COMPOSE_FILE}"
         install_log "Patched compose: OPENSURGE_ADDR=0.0.0.0:${port}"
     fi
+    # 飞牛桌面窗口面板读 ui/config 的 port；向导改端口后必须同步，否则 iframe 仍打 61767。
+    local ui_config="${TRIM_PKG}/ui/config"
+    if [ -f "${ui_config}" ]; then
+        sed -i "s|\"port\"[[:space:]]*:[[:space:]]*\"[0-9]*\"|\"port\": \"${port}\"|" "${ui_config}"
+        install_log "Patched ui/config port=${port}"
+    fi
+    # 防火墙 .sc：Web GUI 端口随向导变；DNS 53 与 mixed 7890 固定。
+    local sc_file="${TRIM_PKG}/OpenSurge.sc"
+    if [ -f "${sc_file}" ]; then
+        sed -i "s|^src.ports=.*|src.ports=\"${port}/tcp,53/tcp,53/udp,7890/tcp\"|" "${sc_file}"
+        sed -i "s|^dst.ports=.*|dst.ports=\"${port}/tcp,53/tcp,53/udp,7890/tcp\"|" "${sc_file}"
+        install_log "Patched OpenSurge.sc web port=${port}"
+    fi
     echo "${port}" > "${PORT_SAVE}" 2>/dev/null || true
     return 0
 }
