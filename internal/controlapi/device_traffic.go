@@ -367,7 +367,7 @@ func gatewayLocalSourceIPs(snapshot mihomo.ConnectionsSnapshot, gatewayIP string
 		if sourceIP == "" {
 			continue
 		}
-		if sourceIP == gatewayIP || isLoopbackIP(sourceIP) || hasLocalProcessEvidence(connection) {
+		if sourceIP == gatewayIP || isLoopbackIP(sourceIP) || isFakeIPSource(sourceIP) || hasLocalProcessEvidence(connection) {
 			result[sourceIP] = struct{}{}
 		}
 	}
@@ -382,7 +382,10 @@ func isGatewayLocalConnection(connection mihomo.Connection, gatewayIP string, lo
 	if sourceIP == "" {
 		return false
 	}
-	if sourceIP == normalizeTrafficIP(gatewayIP) || isLoopbackIP(sourceIP) {
+	// Host traffic through mihomo TUN/fake-ip often reports 198.18.0.0/16 with no
+	// process metadata inside containers. Treat that as gateway-local so it does
+	// not drown the "unclassified" counter and hide missing LAN client capture.
+	if sourceIP == normalizeTrafficIP(gatewayIP) || isLoopbackIP(sourceIP) || isFakeIPSource(sourceIP) {
 		return true
 	}
 	_, exists := localSources[sourceIP]
@@ -397,6 +400,16 @@ func hasLocalProcessEvidence(connection mihomo.Connection) bool {
 func isLoopbackIP(value string) bool {
 	ip := net.ParseIP(value)
 	return ip != nil && ip.IsLoopback()
+}
+
+// isFakeIPSource reports whether ip is inside mihomo's default fake-ip range
+// (198.18.0.0/16, see internal/mihomo config template).
+func isFakeIPSource(value string) bool {
+	ip := net.ParseIP(strings.TrimSpace(value)).To4()
+	if ip == nil {
+		return false
+	}
+	return ip[0] == 198 && ip[1] == 18
 }
 
 func localConnectionTransport(connection mihomo.Connection) string {
