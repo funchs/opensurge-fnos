@@ -44,6 +44,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" go build -trimpath -ldflags="-
 FROM debian:12-slim
 
 # nftables  → internal/pf 的 nft 命令
+# iptables  → mihomo auto-redirect 在 DISABLE_NFTABLES=true 时走 iptables-legacy
+#             （kernel 6.12+ nft 会 EEXIST；见 MetaCubeX/mihomo#3001）
 # iproute2  → internal/macosnetwork 的 ip neigh / ip route / ip addr
 # iputils-ping → PingRouter
 # procps    → internal/sysctl 调的 sysctl 命令
@@ -51,6 +53,7 @@ FROM debian:12-slim
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		nftables \
+		iptables \
 		iproute2 \
 		iputils-ping \
 		procps \

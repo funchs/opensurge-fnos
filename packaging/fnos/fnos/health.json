@@ -1,0 +1,9 @@
+{
+    "type": "http",
+    "path": "/enter",
+    "expect_status": [200, 302, 303, 307, 401, 403],
+    "startup_timeout_seconds": 90,
+    "post_install_warmup_seconds": 5,
+    "skip_arch": [],
+    "note": "OpenSurge control plane /enter issues a session cookie then redirects to the dashboard. Host/network stack (TUN, dnsmasq, mihomo) may still be warming up."
+}
