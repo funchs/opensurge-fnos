@@ -19,4 +19,9 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - OPENSURGE_ADDR=0.0.0.0:${TRIM_SERVICE_PORT}
+      # 浏览器 Origin / Host 白名单主地址；留空则 entrypoint 从 gateway.lan_ip 推导。
+      # 反代或自定义域名访问时设为 https://your.domain 或 http://NAS-IP:端口。
+      - OPENSURGE_BASE_URL=${OPENSURGE_BASE_URL:-}
+      # 额外 Host（逗号分隔），与 BASE_URL 主机并存，用于外网域名 / DDNS / 反代。
+      - OPENSURGE_ALLOWED_HOSTS=${OPENSURGE_ALLOWED_HOSTS:-}
     restart: unless-stopped
