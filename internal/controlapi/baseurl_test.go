@@ -136,7 +136,9 @@ func TestAllowedHostFollowsBaseURL(t *testing.T) {
 		{name: "loopback still allowed", baseURL: "http://192.168.1.20:61767", host: "127.0.0.1:61767", wantCode: http.StatusOK},
 		{name: "localhost still allowed", baseURL: "http://192.168.1.20:61767", host: "localhost:61767", wantCode: http.StatusOK},
 		{name: "base url host allowed", baseURL: "http://192.168.1.20:61767", host: "192.168.1.20:61767", wantCode: http.StatusOK},
-		{name: "other host rejected", baseURL: "http://192.168.1.20:61767", host: "192.168.1.99:61767", wantCode: http.StatusForbidden},
+		// Other private LAN IPs are allowed in LAN mode (fnOS desktop iframe).
+		{name: "other private lan host allowed", baseURL: "http://192.168.1.20:61767", host: "192.168.1.99:61767", wantCode: http.StatusOK},
+		{name: "public ip host rejected", baseURL: "http://192.168.1.20:61767", host: "8.8.8.8", wantCode: http.StatusForbidden},
 		{name: "rebinding host rejected", baseURL: "http://192.168.1.20:61767", host: "evil.example", wantCode: http.StatusForbidden},
 		{name: "lan host rejected without base url", baseURL: "", host: "192.168.1.20:61767", wantCode: http.StatusForbidden},
 	}
@@ -163,5 +165,173 @@ func TestAllowedHostFollowsBaseURL(t *testing.T) {
 				t.Fatalf("status = %d, want %d", recorder.Code, tc.wantCode)
 			}
 		})
+	}
+}
+
+func TestExtraHostsAllowDomainAccess(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		ExtraHosts: []string{"opensurge.example.com", "NAS.Local"},
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"opensurge.example.com", "opensurge.example.com:443", "nas.local", "192.168.1.20:61767"} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("host %q status = %d, want 200", host, recorder.Code)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "evil.example"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("evil host status = %d, want 403", recorder.Code)
+	}
+}
+
+func TestLANModeDeniesFraming(t *testing.T) {
+	// Product choice: open GUI in browser (type=url), not fnOS iframe panel.
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "192.168.1.20:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("X-Frame-Options = %q", recorder.Header().Get("X-Frame-Options"))
+	}
+}
+
+func TestPrivateLANHostAllowedInLANMode(t *testing.T) {
+	// Reproduces fnOS desktop iframe: Host is a private IP that is not BaseURL host.
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767", // config lan_ip
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Desktop opens with a different NIC / system IP than wizard lan_ip.
+	for _, host := range []string{"192.168.1.21:61767", "10.0.0.5:61767", "172.16.1.2"} {
+		request := httptest.NewRequest(http.MethodGet, "/enter", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusFound {
+			t.Fatalf("host %q status = %d body=%s", host, recorder.Code, recorder.Body.String())
+		}
+	}
+	// Public IP still rejected (not private, not allow-listed).
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "8.8.8.8"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("public host status = %d", recorder.Code)
+	}
+}
+
+func TestFnOSConnectHostAllowed(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fixed FN Connect shape: https://opensurge.<fnid>.fnos.net/
+	for _, host := range []string{"opensurge.abc123.fnos.net", "opensurge.my-id.fnos.net"} {
+		request := httptest.NewRequest(http.MethodGet, "/enter", nil)
+		request.Host = host
+		request.Header.Set("X-Forwarded-Proto", "https")
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusFound {
+			t.Fatalf("host %q status = %d, want 302", host, recorder.Code)
+		}
+		cookies := recorder.Result().Cookies()
+		if len(cookies) == 0 || !cookies[0].Secure {
+			t.Fatalf("host %q cookie Secure not set for HTTPS FN Connect: %v", host, cookies)
+		}
+	}
+
+	for _, host := range []string{
+		"evil.abc123.fnos.net",          // wrong app prefix
+		"opensurge.fnos.net",            // missing fnid
+		"opensurge.a.b.fnos.net",        // extra labels
+		"opensurge.-bad.fnos.net",       // invalid label
+		"mihomo.abc123.fnos.net",        // other app
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("host %q status = %d, want 403", host, recorder.Code)
+		}
+	}
+}
+
+func TestIsFnOSConnectHost(t *testing.T) {
+	if !isFnOSConnectHost("opensurge.xxx.fnos.net") {
+		t.Fatal("expected opensurge.xxx.fnos.net allowed")
+	}
+	if isFnOSConnectHost("opensurge.xxx.fnos.com") {
+		t.Fatal("wrong TLD")
+	}
+}
+
+func TestLoopbackModeDeniesIframeEmbedding(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "127.0.0.1:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "127.0.0.1:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("X-Frame-Options = %q", recorder.Header().Get("X-Frame-Options"))
 	}
 }

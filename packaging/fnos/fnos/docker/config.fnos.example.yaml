@@ -49,6 +49,9 @@ transparent:
   tun_stack: "mixed"
   tun_auto_route: true
   tun_auto_detect_interface: false
+  # 旁路由关键：把「指网关过来的转发流量」拉进 TUN。关掉后手机往往只走内核 NAT，
+  # mihomo connections 里只剩 sourceIP=198.18.0.1，活跃设备列表会空。
+  tun_auto_redirect: true
   tun_strict_route: false
 
 local_system_proxy:
