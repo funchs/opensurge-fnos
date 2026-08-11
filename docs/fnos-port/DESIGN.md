@@ -191,7 +191,8 @@ var ErrManagedByFnOS = errors.New("网卡配置由 fnOS 系统设置管理，Ope
 | `Loaded()` | `nft list tables` 输出含 `inet opensurge` |
 | `Enabled()` | 恒 `true, nil`（nftables 无「全局开关」概念） |
 
-规则内容（旁路由 + mihomo TUN 模式，转发由 mihomo 的 TUN 栈处理，nftables 只做出口 NAT 和放行）：
+规则内容（旁路由 + mihomo TUN 模式，转发由 mihomo 的 TUN 栈处理——需
+`tun.auto-redirect` 把指网关过来的转发流量拉进 TUN；nftables 只做出口 NAT 和放行）：
 
 ```
 table inet opensurge {
