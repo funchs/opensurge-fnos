@@ -50,6 +50,11 @@ tun:
   auto-route: {{ .TUNAutoRoute }}
   auto-detect-interface: {{ .TUNAutoDetectInterface }}
   strict-route: {{ .TUNStrictRoute }}
+{{- if .TUNAutoRedirect }}
+  # Linux side-router: pull forwarded LAN client traffic into TUN (nft/iptables).
+  # Without this, clients that only set gateway/DNS often bypass mihomo via pure NAT.
+  auto-redirect: true
+{{- end }}
   dns-hijack:
     - any:53
   route-exclude-address:
@@ -88,6 +93,7 @@ type templateData struct {
 	TUNStack               string
 	TUNAutoRoute           bool
 	TUNAutoDetectInterface bool
+	TUNAutoRedirect        bool
 	TUNStrictRoute         bool
 	UpstreamInterface      string
 	LANPrefix              string
@@ -123,7 +129,10 @@ func newTemplateData(cfg config.Config) (templateData, error) {
 		TUNStack:               transparent.TUNStack,
 		TUNAutoRoute:           transparent.TUNAutoRoute,
 		TUNAutoDetectInterface: transparent.TUNAutoDetectInterface,
-		TUNStrictRoute:         transparent.TUNStrictRoute,
+		// Only emit auto-redirect when the operator enabled it. Defaults are
+		// platform-specific (on for Linux, off elsewhere); see config.Default.
+		TUNAutoRedirect: transparent.TUNAutoRedirect && transparent.TUNEnabled(),
+		TUNStrictRoute:  transparent.TUNStrictRoute,
 		UpstreamInterface:      cfg.Gateway.UpstreamInterface,
 		LANPrefix:              lanPrefix,
 		UpstreamProxy:          cfg.UpstreamProxy,

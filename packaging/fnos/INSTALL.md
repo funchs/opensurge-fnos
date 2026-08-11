@@ -18,7 +18,8 @@
 2. 飞牛应用中心 → **本地安装**
 3. 向导：端口（默认 61767）、网卡、**NAS 局域网 IP（须与浏览器访问 IP 一致）**
 4. 启动应用
-5. 浏览器打开：`http://<NAS-IP>:61767/enter`
+5. 打开 GUI：浏览器访问 `http://<NAS-IP>:61767/enter`，或 FN Connect
+   `https://opensurge.<FNID>.fnos.net/`（见 `docs/fnos-port/FPK-USER-GUIDE.md` §5.2.1）
 
 镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.1`（与 fpk 版本号一致）。  
 若 NAS 拉不到 ghcr，在可联网机器上 `docker pull` + `docker save`，再在 NAS 上 `docker load`。
