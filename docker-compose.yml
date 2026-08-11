@@ -21,5 +21,9 @@ services:
       OPENSURGE_ADDR: 0.0.0.0:61767
       # 浏览器侧看到的地址，Origin 校验用。不填时只允许绑 loopback（上游行为），
       # 从别的机器访问会被拦。留空则由 entrypoint 从 gateway.lan_ip 推导。
+      # 反代/域名访问可设为 https://opensurge.example.com
       OPENSURGE_BASE_URL: ${OPENSURGE_BASE_URL:-}
+      # 额外允许的 Host（逗号分隔）：DDNS 域名、反代主机名、备用 LAN IP。
+      # 例：opensurge.example.com,nas.local
+      OPENSURGE_ALLOWED_HOSTS: ${OPENSURGE_ALLOWED_HOSTS:-}
     restart: unless-stopped
