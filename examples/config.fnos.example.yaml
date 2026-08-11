@@ -48,7 +48,12 @@ transparent:
   tun_device: "utun123"
   tun_stack: "mixed"
   tun_auto_route: true
-  tun_auto_detect_interface: false
+  # 与 conversun mihomo 一致：自动选出口网卡，本机浏览器/进程才能稳定透明代理。
+  # 固定 false 且写死 interface-name 时，常见 curl 正常、Chromium 异常断开。
+  tun_auto_detect_interface: true
+  # 旁路由关键：把「指网关过来的转发流量」拉进 TUN。关掉后手机往往只走内核 NAT，
+  # mihomo connections 里只剩 sourceIP=198.18.0.1，活跃设备列表会空。
+  tun_auto_redirect: true
   tun_strict_route: false
 
 local_system_proxy:

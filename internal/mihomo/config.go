@@ -13,9 +13,11 @@ allow-lan: true
 bind-address: "*"
 mode: rule
 log-level: info
-{{ if .TUNEnabled }}
+{{- if and .TUNEnabled (not .TUNAutoDetectInterface) }}
+# Only pin egress when auto-detect is off. Fixed interface-name breaks some host
+# apps (e.g. fnOS fygo-browser) while conversun-style auto-detect works for them.
 interface-name: {{ .UpstreamInterface }}
-{{ end }}
+{{- end }}
 
 external-controller: {{ .APIAddr }}
 {{- if .Secret }}
@@ -48,10 +50,17 @@ tun:
   stack: {{ .TUNStack }}
   device: {{ .TUNDevice }}
   auto-route: {{ .TUNAutoRoute }}
+  # Align with conversun/fnos-apps mihomo: auto-detect egress for whole-NAS TUN.
   auto-detect-interface: {{ .TUNAutoDetectInterface }}
   strict-route: {{ .TUNStrictRoute }}
+{{- if .TUNAutoRedirect }}
+  # Linux side-router: pull forwarded LAN client traffic into TUN (iptables when
+  # DISABLE_NFTABLES=true). Without this, phone traffic often bypasses mihomo.
+  auto-redirect: true
+{{- end }}
   dns-hijack:
     - any:53
+    - tcp://any:53
   route-exclude-address:
     - {{ .LANPrefix }}
     - 127.0.0.0/8
@@ -88,6 +97,7 @@ type templateData struct {
 	TUNStack               string
 	TUNAutoRoute           bool
 	TUNAutoDetectInterface bool
+	TUNAutoRedirect        bool
 	TUNStrictRoute         bool
 	UpstreamInterface      string
 	LANPrefix              string
@@ -123,7 +133,10 @@ func newTemplateData(cfg config.Config) (templateData, error) {
 		TUNStack:               transparent.TUNStack,
 		TUNAutoRoute:           transparent.TUNAutoRoute,
 		TUNAutoDetectInterface: transparent.TUNAutoDetectInterface,
-		TUNStrictRoute:         transparent.TUNStrictRoute,
+		// Only emit auto-redirect when the operator enabled it. Defaults are
+		// platform-specific (on for Linux, off elsewhere); see config.Default.
+		TUNAutoRedirect: transparent.TUNAutoRedirect && transparent.TUNEnabled(),
+		TUNStrictRoute:  transparent.TUNStrictRoute,
 		UpstreamInterface:      cfg.Gateway.UpstreamInterface,
 		LANPrefix:              lanPrefix,
 		UpstreamProxy:          cfg.UpstreamProxy,

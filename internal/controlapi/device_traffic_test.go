@@ -120,6 +120,28 @@ func TestAggregateDeviceTrafficSeparatesGatewayLocalAndUnclassifiedConnections(t
 	}
 }
 
+func TestAggregateDeviceTrafficTreatsFakeIPWithoutProcessAsGatewayLocal(t *testing.T) {
+	// Reproduces the fnOS side-router symptom: container TUN sessions report
+	// sourceIP=198.18.0.1 with empty process metadata.
+	snapshot := mihomo.ConnectionsSnapshot{Connections: []mihomo.Connection{
+		{Upload: 50, Download: 500, Chains: []string{"Proxy"}, Metadata: map[string]any{"sourceIP": "198.18.0.1", "type": "Tun"}},
+		{Upload: 10, Download: 20, Chains: []string{"DIRECT"}, Metadata: map[string]any{"sourceIP": "198.18.0.2", "type": "Tun"}},
+	}}
+	result := aggregateDeviceTrafficWithPolicy(nil, device.PolicySet{}, snapshot, "192.168.1.21", true)
+	if result.GatewayLocal.ActiveConnections != 2 || result.GatewayLocal.Upload != 60 || result.GatewayLocal.Download != 520 {
+		t.Fatalf("gateway local = %#v", result.GatewayLocal)
+	}
+	if result.UnclassifiedConnections != 0 {
+		t.Fatalf("unclassified=%d want 0", result.UnclassifiedConnections)
+	}
+	if len(result.Devices) != 0 || result.Totals.Devices != 0 {
+		t.Fatalf("devices = %#v", result.Devices)
+	}
+	if result.GatewayLocal.Transport != localTransportTUN {
+		t.Fatalf("transport = %q", result.GatewayLocal.Transport)
+	}
+}
+
 func TestAggregateSameLANDeviceTrafficDoesNotRenameConflictingLease(t *testing.T) {
 	policy := device.PolicySet{Devices: []device.ManagedDevice{{
 		ID: "registered", Name: "Registered Device", MAC: "aa:bb:cc:dd:ee:24", IPv4: "192.168.5.124",
