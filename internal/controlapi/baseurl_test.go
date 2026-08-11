@@ -165,3 +165,143 @@ func TestAllowedHostFollowsBaseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestExtraHostsAllowDomainAccess(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		ExtraHosts: []string{"opensurge.example.com", "NAS.Local"},
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"opensurge.example.com", "opensurge.example.com:443", "nas.local", "192.168.1.20:61767"} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("host %q status = %d, want 200", host, recorder.Code)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "evil.example"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("evil host status = %d, want 403", recorder.Code)
+	}
+}
+
+func TestLANModeAllowsIframeEmbedding(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "192.168.1.20:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("X-Frame-Options"); got != "" {
+		t.Fatalf("X-Frame-Options = %q, want empty for LAN iframe panel", got)
+	}
+	csp := recorder.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors *") {
+		t.Fatalf("CSP = %q, want frame-ancestors * for fnOS desktop window", csp)
+	}
+}
+
+func TestFnOSConnectHostAllowed(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fixed FN Connect shape: https://opensurge.<fnid>.fnos.net/
+	for _, host := range []string{"opensurge.abc123.fnos.net", "opensurge.my-id.fnos.net"} {
+		request := httptest.NewRequest(http.MethodGet, "/enter", nil)
+		request.Host = host
+		request.Header.Set("X-Forwarded-Proto", "https")
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusFound {
+			t.Fatalf("host %q status = %d, want 302", host, recorder.Code)
+		}
+		cookies := recorder.Result().Cookies()
+		if len(cookies) == 0 || !cookies[0].Secure {
+			t.Fatalf("host %q cookie Secure not set for HTTPS FN Connect: %v", host, cookies)
+		}
+	}
+
+	for _, host := range []string{
+		"evil.abc123.fnos.net",          // wrong app prefix
+		"opensurge.fnos.net",            // missing fnid
+		"opensurge.a.b.fnos.net",        // extra labels
+		"opensurge.-bad.fnos.net",       // invalid label
+		"mihomo.abc123.fnos.net",        // other app
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("host %q status = %d, want 403", host, recorder.Code)
+		}
+	}
+}
+
+func TestIsFnOSConnectHost(t *testing.T) {
+	if !isFnOSConnectHost("opensurge.xxx.fnos.net") {
+		t.Fatal("expected opensurge.xxx.fnos.net allowed")
+	}
+	if isFnOSConnectHost("opensurge.xxx.fnos.com") {
+		t.Fatal("wrong TLD")
+	}
+}
+
+func TestLoopbackModeDeniesIframeEmbedding(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "127.0.0.1:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "127.0.0.1:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("X-Frame-Options = %q", recorder.Header().Get("X-Frame-Options"))
+	}
+}
