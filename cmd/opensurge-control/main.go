@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"open-mihomo-gateway/internal/controlapi"
@@ -16,6 +17,7 @@ func main() {
 	configPath := flag.String("config", "examples/config.example.yaml", "path to gateway config")
 	addr := flag.String("addr", "127.0.0.1:61767", "listen address; must be loopback unless -base-url is set")
 	baseURL := flag.String("base-url", "", "browser-facing base URL, e.g. http://192.168.1.20:61767; required when -addr is not loopback")
+	allowedHosts := flag.String("allowed-hosts", "", "comma-separated extra Host names (domains / reverse-proxy hostnames) allowed in addition to -base-url host")
 	storeDir := flag.String("store", "", "application support directory")
 	helperSocket := flag.String("helper-socket", "/var/run/opensurge/helper.sock", "privileged helper socket")
 	direct := flag.Bool("direct-root", false, "run actions directly; requires root and is intended for development")
@@ -25,10 +27,18 @@ func main() {
 	if *direct {
 		runner = controlapi.DirectRunner{}
 	}
+	var extraHosts []string
+	for _, part := range strings.Split(*allowedHosts, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			extraHosts = append(extraHosts, part)
+		}
+	}
 	server, err := controlapi.New(controlapi.Options{
 		ConfigPath: *configPath,
 		Addr:       *addr,
 		BaseURL:    *baseURL,
+		ExtraHosts: extraHosts,
 		StoreDir:   *storeDir,
 		Runner:     runner,
 		Static:     webui.Handler(),
