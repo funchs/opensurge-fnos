@@ -53,6 +53,7 @@ transparent:
   tun_stack: %s
   tun_auto_route: %t
   tun_auto_detect_interface: %t
+  tun_auto_redirect: %t
   tun_strict_route: %t
 
 local_system_proxy:
@@ -77,7 +78,7 @@ runtime:
 		q(cfg.DNS.Listen), cfg.DNS.Port, q(cfg.DNS.Upstream),
 		q(cfg.Mihomo.Binary), q(cfg.Mihomo.Config), q(cfg.Mihomo.ProfileMode), q(cfg.Mihomo.Profile), cfg.Mihomo.MixedPort, cfg.Mihomo.RedirPort, q(cfg.Mihomo.APIAddr), q(cfg.Mihomo.Secret),
 		q(cfg.PF.AnchorName), cfg.PF.RedirectTCPTo,
-		q(cfg.Transparent.Mode), q(cfg.Transparent.TUNDevice), q(cfg.Transparent.TUNStack), cfg.Transparent.TUNAutoRoute, cfg.Transparent.TUNAutoDetectInterface, cfg.Transparent.TUNStrictRoute,
+		q(cfg.Transparent.Mode), q(cfg.Transparent.TUNDevice), q(cfg.Transparent.TUNStack), cfg.Transparent.TUNAutoRoute, cfg.Transparent.TUNAutoDetectInterface, cfg.Transparent.TUNAutoRedirect, cfg.Transparent.TUNStrictRoute,
 		cfg.LocalSystemProxy.Enabled,
 		cfg.UpstreamProxy.Enabled, q(cfg.UpstreamProxy.Name), q(cfg.UpstreamProxy.Type), q(cfg.UpstreamProxy.Server), cfg.UpstreamProxy.Port, q(cfg.UpstreamProxy.Username), q(cfg.UpstreamProxy.Password), q(cfg.UpstreamProxy.MatchDomain),
 		q(cfg.Runtime.Dir),
