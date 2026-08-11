@@ -149,7 +149,11 @@ docker load -i opensurge-v0.1.1.tar
 http://<NAS-IP>:61767/enter
 ```
 
-端口以向导填写为准。桌面图标默认也打开 **`/enter`**。
+端口以向导填写为准。
+
+**飞牛桌面窗口面板**：应用中心 / 桌面图标使用 `type=iframe` 打开同一地址（对齐
+[conversun/fnos-apps mihomo](https://github.com/conversun/fnos-apps/tree/main/apps/mihomo)），
+在 fnOS 自带窗口内嵌入管理界面，无需另开浏览器。
 
 ### 5.2 为什么不能只打开根路径？
 
@@ -169,6 +173,47 @@ http://<NAS-IP>:61767/enter
 | 端口 | 向导端口与 compose / 访问端口一致 |
 | 容器是否运行 | `docker ps \| grep opensurge` |
 | 浏览器 | 换无痕窗口，避免旧 cookie |
+| 域名访问 | 见下一节「外网域名 / 反代」 |
+
+### 5.2.1 外网域名（FN Connect 固定格式）
+
+飞牛 **FN Connect** 给本应用的外网地址格式固定为：
+
+```text
+https://opensurge.<你的FNID>.fnos.net/
+```
+
+示例：`https://opensurge.abc123.fnos.net/`
+
+控制面在局域网模式（已配置 BaseURL）下会 **自动放行** 匹配
+
+```text
+opensurge.<fnid>.fnos.net
+```
+
+的 Host（`fnid` 为单段 DNS 标签），无需再手填 `OPENSURGE_ALLOWED_HOSTS`。  
+经 HTTPS / `X-Forwarded-Proto: https` 访问时，session cookie 会带 `Secure`。
+
+| 入口 | 说明 |
+| --- | --- |
+| 局域网 | `http://<NAS-IP>:61767/enter` |
+| FN Connect | `https://opensurge.<FNID>.fnos.net/`（进应用后同样走 `/enter`） |
+| 飞牛桌面窗口 | 应用中心 iframe，一般仍用 NAS IP:端口 |
+
+**其它自定义域名 / 反代**（非 `*.fnos.net`）仍可用：
+
+```bash
+OPENSURGE_BASE_URL=http://192.168.1.21:61767
+OPENSURGE_ALLOWED_HOSTS=opensurge.example.com,nas.local
+```
+
+或直接：
+
+```bash
+OPENSURGE_BASE_URL=https://opensurge.example.com
+```
+
+> 不要把 61767 明文 HTTP 直接映射到公网；FN Connect / 带 TLS 的反代优先。
 
 ### 5.3 调试：手工签发 30 秒 bootstrap 链接
 
