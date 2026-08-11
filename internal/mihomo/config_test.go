@@ -266,6 +266,23 @@ func TestRenderConfigWithTUN(t *testing.T) {
 			t.Fatalf("rendered config missing %q:\n%s", want, rendered)
 		}
 	}
+	// Darwin/default test host: auto-redirect stays off unless explicitly enabled.
+	if strings.Contains(rendered, "auto-redirect:") && !cfg.Transparent.TUNAutoRedirect {
+		t.Fatalf("rendered config unexpectedly contains auto-redirect:\n%s", rendered)
+	}
+}
+
+func TestRenderConfigWithTUNAutoRedirect(t *testing.T) {
+	cfg := config.Default()
+	cfg.Transparent.Mode = config.TransparentModeTUN
+	cfg.Transparent.TUNAutoRedirect = true
+	rendered, err := RenderConfig(cfg)
+	if err != nil {
+		t.Fatalf("RenderConfig() error = %v", err)
+	}
+	if !strings.Contains(rendered, "  auto-redirect: true") {
+		t.Fatalf("rendered config missing auto-redirect:\n%s", rendered)
+	}
 }
 
 func TestRenderConfigWithDevicePolicyOverlayPreservesImportedRuleOrder(t *testing.T) {
