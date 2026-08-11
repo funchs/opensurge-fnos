@@ -87,6 +87,11 @@ assemble_package() {
         cp fnos/*.sc "${build_dir}/"
     fi
 
+    # 应用中心健康检查（对齐 conversun/fnos-apps mihomo）
+    if [[ -f fnos/health.json ]]; then
+        cp fnos/health.json "${build_dir}/health.json"
+    fi
+
     cp fnos/ICON.PNG "${build_dir}/ICON.PNG"
     cp fnos/ICON_256.PNG "${build_dir}/ICON_256.PNG"
 
