@@ -35,7 +35,10 @@ type Options struct {
 	// BaseURL 是浏览器看到的地址，留空时等于 "http://" + Addr。
 	// 显式给了才允许 Addr 绑非 loopback —— 这是给「控制面跑在 NAS 上、
 	// 浏览器在另一台机器」的部署用的（见 docs/fnos-port/DEPLOY.md）。
-	BaseURL           string
+	BaseURL string
+	// ExtraHosts 是额外允许的 Host 名（域名 / 备用 LAN IP / 反代主机名）。
+	// 用于 fnOS 反代、DDNS、自定义域名访问；不影响 BaseURL 作为默认 Origin。
+	ExtraHosts        []string
 	StoreDir          string
 	Runner            ActionRunner
 	NetworkRunner     NetworkRunner
@@ -70,10 +73,10 @@ type Server struct {
 	trafficSampler    *trafficRateSampler
 	token             string
 	baseURL           string
-	// allowedHost 是 baseURL 的主机名。上游只放行 127.0.0.1 / localhost 来防
-	// DNS rebinding；控制面绑到局域网时，浏览器发来的 Host 是 NAS 的 IP，
-	// 必须一起放行，否则连静态页都是 403。
-	allowedHost string
+	// allowedHosts 含 baseURL 主机名与 ExtraHosts。上游只放行 loopback 防 DNS
+	// rebinding；LAN/域名模式要把 NAS IP 与反代域名一起放行，否则静态页 403。
+	// 非空时同时放宽 iframe 嵌入策略，以支持飞牛桌面「窗口面板」(type=iframe)。
+	allowedHosts map[string]struct{}
 
 	mu         sync.Mutex
 	sessions   map[string]time.Time
@@ -105,16 +108,30 @@ func New(options Options) (*Server, error) {
 	// 会话签发仍然要 control-token，放开绑定不等于无认证开放；但 baseURL 必须
 	// 是浏览器实际用的地址，否则 Origin 校验会挡掉所有写操作。
 	baseURL := "http://" + options.Addr
-	allowedHost := ""
+	allowedHosts := map[string]struct{}{}
 	if trimmed := strings.TrimSuffix(strings.TrimSpace(options.BaseURL), "/"); trimmed != "" {
 		parsed, err := url.Parse(trimmed)
 		if err != nil || parsed.Hostname() == "" {
 			return nil, fmt.Errorf("control API base URL is invalid: %s", trimmed)
 		}
 		baseURL = trimmed
-		allowedHost = parsed.Hostname()
+		allowedHosts[strings.ToLower(parsed.Hostname())] = struct{}{}
 	} else if host != "127.0.0.1" && host != "localhost" {
 		return nil, fmt.Errorf("control API must listen on loopback IPv4 unless BaseURL is set")
+	}
+	for _, extra := range options.ExtraHosts {
+		extra = strings.ToLower(strings.TrimSpace(extra))
+		if extra == "" {
+			continue
+		}
+		// Accept bare host or host:port; strip brackets for IPv6 literals later if needed.
+		if h, _, err := net.SplitHostPort(extra); err == nil {
+			extra = h
+		}
+		extra = strings.Trim(extra, "[]")
+		if extra != "" {
+			allowedHosts[extra] = struct{}{}
+		}
 	}
 	if options.StoreDir == "" {
 		home, err := os.UserHomeDir()
@@ -194,10 +211,112 @@ func New(options Options) (*Server, error) {
 		trafficSampler:    newTrafficRateSampler(),
 		token:             token,
 		baseURL:           baseURL,
-		allowedHost:       allowedHost,
+		allowedHosts:      allowedHosts,
 		sessions:          map[string]time.Time{},
 		bootstraps:        map[string]bootstrapGrant{},
 	}, nil
+}
+
+func (s *Server) hostAllowed(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "127.0.0.1" || host == "localhost" || host == "::1" {
+		return true
+	}
+	if !s.lanMode() {
+		return false
+	}
+	// Explicit allow-list: BaseURL host + OPENSURGE_ALLOWED_HOSTS.
+	if s.allowedHosts != nil {
+		if _, ok := s.allowedHosts[host]; ok {
+			return true
+		}
+	}
+	// FN Connect fixed app URL: https://opensurge.<fnid>.fnos.net/
+	if isFnOSConnectHost(host) {
+		return true
+	}
+	// fnOS desktop iframe often opens http://<any-local-ip>:<port>/enter, which may
+	// differ from gateway.lan_ip used to derive BaseURL (wrong wizard IP, multi-NIC,
+	// or system-settings IP). Private IPv4 Hosts are LAN-only; DNS-rebinding still
+	// cannot use an arbitrary public hostname because those stay rejected.
+	if ip := net.ParseIP(host); ip != nil && ip.To4() != nil && ip.IsPrivate() {
+		return true
+	}
+	// mDNS / local hostname used by some browsers on the LAN.
+	if strings.HasSuffix(host, ".local") && isDNSLabel(strings.TrimSuffix(host, ".local")) {
+		return true
+	}
+	return false
+}
+
+// lanMode reports whether the control plane is bound for non-loopback browser
+// access (fnOS / Docker). Used to enable /enter and desktop iframe embedding.
+func (s *Server) lanMode() bool {
+	return len(s.allowedHosts) > 0
+}
+
+// isFnOSConnectHost matches the fixed FN Connect remote URL shape for this app:
+//
+//	opensurge.<fnid>.fnos.net
+//
+// Example: opensurge.abc123.fnos.net → https://opensurge.abc123.fnos.net/
+func isFnOSConnectHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	const suffix = ".fnos.net"
+	if !strings.HasSuffix(host, suffix) {
+		return false
+	}
+	rest := strings.TrimSuffix(host, suffix)
+	app, fnid, ok := strings.Cut(rest, ".")
+	if !ok || app != "opensurge" || fnid == "" || strings.Contains(fnid, ".") {
+		return false
+	}
+	return isDNSLabel(fnid)
+}
+
+func isDNSLabel(s string) bool {
+	if len(s) == 0 || len(s) > 63 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		ok := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'
+		if !ok {
+			return false
+		}
+		if (i == 0 || i == len(s)-1) && c == '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) originAllowed(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	if origin == s.baseURL {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Hostname() == "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	return s.hostAllowed(parsed.Hostname())
+}
+
+func requestIsHTTPS(r *http.Request) bool {
+	if r != nil && r.TLS != nil {
+		return true
+	}
+	if r == nil {
+		return false
+	}
+	proto := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")))
+	return proto == "https"
 }
 
 func (s *Server) BootstrapURL() string {
@@ -217,7 +336,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /bootstrap", s.exchangeBootstrap)
 	// /enter：fnOS / Docker 局域网模式下，浏览器直连 IP:端口时自动签发 session。
-	// macOS loopback 模式（allowedHost 为空）不开放此入口，仍走菜单栏 bootstrap。
+	// macOS loopback 模式（allowedHosts 为空）不开放此入口，仍走菜单栏 bootstrap。
 	mux.HandleFunc("GET /enter", s.handleEnter)
 	mux.HandleFunc("POST /api/v1/session/bootstrap", s.handleSessionBootstrap)
 	mux.Handle("GET /api/v1/overview", s.auth(http.HandlerFunc(s.handleOverview)))
@@ -384,14 +503,15 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		if parsed, _, err := net.SplitHostPort(r.Host); err == nil {
 			host = parsed
 		}
-		if host != "127.0.0.1" && host != "localhost" && (s.allowedHost == "" || host != s.allowedHost) {
-			writeError(w, http.StatusForbidden, "invalid_host", "request host is not allowed")
+		if !s.hostAllowed(host) {
+			writeError(w, http.StatusForbidden, "invalid_host",
+				fmt.Sprintf("request host %q is not allowed (expect BaseURL host, private LAN IP, opensurge.<fnid>.fnos.net, or OPENSURGE_ALLOWED_HOSTS)", host))
 			return
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -413,7 +533,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			}
 			s.mu.Unlock()
 			if sessionOK {
-				setWebSessionCookie(w, cookie.Value, now)
+				setWebSessionCookie(w, cookie.Value, now, requestIsHTTPS(r))
 			}
 		}
 		if !bearerOK && !sessionOK {
@@ -422,7 +542,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 		}
 		if !bearerOK && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			origin := r.Header.Get("Origin")
-			if origin != s.baseURL {
+			if !s.originAllowed(origin) {
 				writeError(w, http.StatusForbidden, "origin_rejected", "mutation origin is not allowed")
 				return
 			}
@@ -447,11 +567,11 @@ func (s *Server) exchangeBootstrap(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleEnter issues a browser session without a one-shot bootstrap code.
-// Only available when the control plane is bound for LAN use (BaseURL set):
-// the Host must match allowedHost / loopback, same as securityHeaders.
-// This is what makes "open http://NAS-IP:port" work for fnOS desktop icons.
+// Only available when the control plane is bound for LAN/domain use (BaseURL set):
+// the Host must match allowedHosts / loopback, same as securityHeaders.
+// This is what makes "open http://NAS-IP:port" and fnOS desktop iframe work.
 func (s *Server) handleEnter(w http.ResponseWriter, r *http.Request) {
-	if s.allowedHost == "" {
+	if !s.lanMode() {
 		http.Error(w, "LAN enter is only available when BaseURL is configured", http.StatusUnauthorized)
 		return
 	}
@@ -467,11 +587,11 @@ func (s *Server) issueWebSession(w http.ResponseWriter, r *http.Request, path st
 	s.mu.Lock()
 	s.sessions[session] = now.Add(webSessionIdleTimeout)
 	s.mu.Unlock()
-	setWebSessionCookie(w, session, now)
+	setWebSessionCookie(w, session, now, requestIsHTTPS(r))
 	http.Redirect(w, r, "/"+path, http.StatusFound)
 }
 
-func setWebSessionCookie(w http.ResponseWriter, session string, now time.Time) {
+func setWebSessionCookie(w http.ResponseWriter, session string, now time.Time, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "opensurge_session",
 		Value:    session,
@@ -479,6 +599,7 @@ func setWebSessionCookie(w http.ResponseWriter, session string, now time.Time) {
 		Expires:  now.Add(webSessionIdleTimeout),
 		MaxAge:   int(webSessionIdleTimeout / time.Second),
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 	})
 }
