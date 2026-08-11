@@ -94,7 +94,11 @@ type TransparentConfig struct {
 	TUNStack               string
 	TUNAutoRoute           bool
 	TUNAutoDetectInterface bool
-	TUNStrictRoute         bool
+	// TUNAutoRedirect enables mihomo's Linux nft/iptables auto-redirect so
+	// forwarded LAN client traffic enters the TUN stack (side-router path).
+	// Safe to leave false on Darwin; the renderer only emits it when true.
+	TUNAutoRedirect bool
+	TUNStrictRoute  bool
 }
 
 // LocalSystemProxyConfig enables an opt-in compatibility layer for local Mac
@@ -168,7 +172,8 @@ func Default() Config {
 			TUNDevice:              "utun123",
 			TUNStack:               "mixed",
 			TUNAutoRoute:           true,
-			TUNAutoDetectInterface: false,
+			TUNAutoDetectInterface: defaultTUNAutoDetectInterface(),
+			TUNAutoRedirect:        defaultTUNAutoRedirect(),
 			TUNStrictRoute:         false,
 		},
 		LocalSystemProxy: LocalSystemProxyConfig{Enabled: false},
