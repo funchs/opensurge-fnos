@@ -74,7 +74,17 @@ func (m Manager) Start() (int, error) {
 	if err := os.WriteFile(m.paths.MihomoLog, nil, 0o640); err != nil {
 		return 0, err
 	}
-	pid, err := process.StartDetachedWithLog(m.paths.MihomoLog, binary, "-d", configDir, "-f", m.paths.MihomoConfig)
+	// auto-redirect on Linux uses nftables by default. On kernel 6.12+ nftables
+	// rejects sing-tun's NEWSET+NEWSETELEM in one batch with EEXIST
+	// ("auto redirect: conn.Receive: netlink receive: file exists").
+	// DISABLE_NFTABLES forces the iptables-legacy path, which still provides
+	// LAN side-router redirect without that kernel bug.
+	// See MetaCubeX/mihomo#3001.
+	var extraEnv []string
+	if m.cfg.Transparent.TUNEnabled() && m.cfg.Transparent.TUNAutoRedirect {
+		extraEnv = append(extraEnv, "DISABLE_NFTABLES=true")
+	}
+	pid, err := process.StartDetachedWithLogEnv(m.paths.MihomoLog, extraEnv, binary, "-d", configDir, "-f", m.paths.MihomoConfig)
 	if err != nil {
 		return 0, err
 	}
