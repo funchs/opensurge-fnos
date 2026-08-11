@@ -48,7 +48,10 @@ transparent:
   tun_device: "utun123"
   tun_stack: "mixed"
   tun_auto_route: true
-  tun_auto_detect_interface: false
+  # 与 conversun mihomo 一致：自动选出口网卡，本机浏览器/进程才能稳定透明代理。
+  tun_auto_detect_interface: true
+  # 旁路由关键：把「指网关过来的转发流量」拉进 TUN。
+  tun_auto_redirect: true
   tun_strict_route: false
 
 local_system_proxy:

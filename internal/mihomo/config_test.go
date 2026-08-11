@@ -244,6 +244,8 @@ func TestRenderConfigWithTUN(t *testing.T) {
 	cfg.Transparent.Mode = config.TransparentModeTUN
 	cfg.Transparent.TUNDevice = "utun123"
 	cfg.Transparent.TUNStack = "mixed"
+	// Pin egress (auto-detect off) so interface-name is rendered.
+	cfg.Transparent.TUNAutoDetectInterface = false
 	rendered, err := RenderConfig(cfg)
 	if err != nil {
 		t.Fatalf("RenderConfig() error = %v", err)
@@ -258,6 +260,7 @@ func TestRenderConfigWithTUN(t *testing.T) {
 		"  auto-route: true",
 		"  dns-hijack:",
 		"    - any:53",
+		"    - tcp://any:53",
 		"  route-exclude-address:",
 		"    - 192.168.50.0/24",
 		"    - 192.168.0.0/16",
@@ -265,6 +268,40 @@ func TestRenderConfigWithTUN(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered config missing %q:\n%s", want, rendered)
 		}
+	}
+	// Darwin/default test host: auto-redirect stays off unless explicitly enabled.
+	if strings.Contains(rendered, "auto-redirect:") && !cfg.Transparent.TUNAutoRedirect {
+		t.Fatalf("rendered config unexpectedly contains auto-redirect:\n%s", rendered)
+	}
+}
+
+func TestRenderConfigWithTUNAutoDetectOmitsInterfaceName(t *testing.T) {
+	cfg := config.Default()
+	cfg.Transparent.Mode = config.TransparentModeTUN
+	cfg.Transparent.TUNAutoDetectInterface = true
+	cfg.Gateway.UpstreamInterface = "enp5s0"
+	rendered, err := RenderConfig(cfg)
+	if err != nil {
+		t.Fatalf("RenderConfig() error = %v", err)
+	}
+	if strings.Contains(rendered, "interface-name:") {
+		t.Fatalf("auto-detect should omit interface-name:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "auto-detect-interface: true") {
+		t.Fatalf("missing auto-detect-interface:\n%s", rendered)
+	}
+}
+
+func TestRenderConfigWithTUNAutoRedirect(t *testing.T) {
+	cfg := config.Default()
+	cfg.Transparent.Mode = config.TransparentModeTUN
+	cfg.Transparent.TUNAutoRedirect = true
+	rendered, err := RenderConfig(cfg)
+	if err != nil {
+		t.Fatalf("RenderConfig() error = %v", err)
+	}
+	if !strings.Contains(rendered, "  auto-redirect: true") {
+		t.Fatalf("rendered config missing auto-redirect:\n%s", rendered)
 	}
 }
 
