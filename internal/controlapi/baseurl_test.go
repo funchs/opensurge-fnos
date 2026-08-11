@@ -165,3 +165,87 @@ func TestAllowedHostFollowsBaseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestExtraHostsAllowDomainAccess(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		ExtraHosts: []string{"opensurge.example.com", "NAS.Local"},
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"opensurge.example.com", "opensurge.example.com:443", "nas.local", "192.168.1.20:61767"} {
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Host = host
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("host %q status = %d, want 200", host, recorder.Code)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "evil.example"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("evil host status = %d, want 403", recorder.Code)
+	}
+}
+
+func TestLANModeAllowsIframeEmbedding(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "0.0.0.0:61767",
+		BaseURL:    "http://192.168.1.20:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "192.168.1.20:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("X-Frame-Options"); got != "" {
+		t.Fatalf("X-Frame-Options = %q, want empty for LAN iframe panel", got)
+	}
+	csp := recorder.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors *") {
+		t.Fatalf("CSP = %q, want frame-ancestors * for fnOS desktop window", csp)
+	}
+}
+
+func TestLoopbackModeDeniesIframeEmbedding(t *testing.T) {
+	dir := t.TempDir()
+	server, err := New(Options{
+		ConfigPath: filepath.Join(dir, "config.yaml"),
+		Addr:       "127.0.0.1:61767",
+		StoreDir:   filepath.Join(dir, "store"),
+		Runner:     fakeRunner{},
+		Static:     http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Host = "127.0.0.1:61767"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("X-Frame-Options = %q", recorder.Header().Get("X-Frame-Options"))
+	}
+}
