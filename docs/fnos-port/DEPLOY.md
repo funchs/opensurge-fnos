@@ -129,6 +129,16 @@ compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 **设备名只显示 IP + MAC，没有主机名** —— 已知降级，旁路由不接管 DHCP 就没有 lease
 数据源。见 `DESIGN.md` 的「已知降级」。
 
+**活跃设备为空，诊断里 sourceIP 全是 `198.18.0.1`** —— 下游没进 mihomo TUN，只剩
+NAS 本机会话。确认 `transparent.tun_auto_redirect: true`（Linux 默认开；旧配置请补上），
+重载/重启网关后让手机再产生流量，并跑：
+
+```bash
+LAN_PREFIX=192.168.1 ./scripts/check-lan-connections.sh
+```
+
+应出现 `192.168.x` 的 sourceIP；只有 `198.18.x` 说明仍在走内核 NAT 旁路。
+
 **Web GUI 的网络配置页报 `网卡配置由 fnOS 系统设置管理`** —— 这是设计决策，不是 bug。
 改 NAS 的 IP 请去 fnOS 系统设置。
 
