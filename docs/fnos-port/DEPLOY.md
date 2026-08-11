@@ -101,6 +101,12 @@ compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 - **局域网可信**：`/enter` 允许访问该 Host 的设备进入控制台；**不要端口转发到公网**。
 - `control-token` 在 `state/store/control-token`（0600），用于运维 bootstrap API。
 - 更严：只绑 `127.0.0.1` + SSH 隧道。
+- **飞牛窗口面板**：fpk 的 `ui/config` 使用 `type: iframe`（对齐 conversun mihomo），
+  LAN 模式下控制面放宽 `frame-ancestors`，桌面内嵌窗口可正常显示。
+- **FN Connect 域名（固定格式）**：`https://opensurge.<FNID>.fnos.net/`  
+  控制面自动放行 Host `opensurge.<FNID>.fnos.net`，无需手写白名单。  
+- **其它自定义域名 / 反代**：设置 `OPENSURGE_BASE_URL`，或
+  `OPENSURGE_ALLOWED_HOSTS`（逗号分隔）。
 
 > 上游默认只绑 loopback；本项目用可选 `BaseURL` 支持「控制面在 NAS、浏览器在
 > 另一台机器」。entrypoint 会从 `gateway.lan_ip` 自动推导 BaseURL。
@@ -128,6 +134,16 @@ compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 
 **设备名只显示 IP + MAC，没有主机名** —— 已知降级，旁路由不接管 DHCP 就没有 lease
 数据源。见 `DESIGN.md` 的「已知降级」。
+
+**活跃设备为空，诊断里 sourceIP 全是 `198.18.0.1`** —— 下游没进 mihomo TUN，只剩
+NAS 本机会话。确认 `transparent.tun_auto_redirect: true`（Linux 默认开；旧配置请补上），
+重载/重启网关后让手机再产生流量，并跑：
+
+```bash
+LAN_PREFIX=192.168.1 ./scripts/check-lan-connections.sh
+```
+
+应出现 `192.168.x` 的 sourceIP；只有 `198.18.x` 说明仍在走内核 NAT 旁路。
 
 **Web GUI 的网络配置页报 `网卡配置由 fnOS 系统设置管理`** —— 这是设计决策，不是 bug。
 改 NAS 的 IP 请去 fnOS 系统设置。
