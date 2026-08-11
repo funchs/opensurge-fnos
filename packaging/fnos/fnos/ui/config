@@ -4,8 +4,8 @@
         {
             "title": "OpenSurge",
             "desc": "透明代理与智能分流网关",
-            "icon": "images/icon-{0}.png",
-            "type": "url",
+            "icon": "images/{0}.png",
+            "type": "iframe",
             "port": "61767",
             "protocol": "http",
             "url": "/enter",

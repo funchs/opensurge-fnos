@@ -14,6 +14,8 @@ fi
 
 # 浏览器实际用的地址。控制面拿它做 Origin 校验，填错的话 GUI 会变成只读
 # （所有 POST 返回 403）。不给就从配置里的 gateway.lan_ip 推——那就是 NAS 的局域网 IP。
+# 若走反代/DDNS/自定义域名，请把 OPENSURGE_BASE_URL 设成外网可达地址，或把域名
+# 放进 OPENSURGE_ALLOWED_HOSTS（逗号分隔，可与 LAN IP 并存）。
 if [ -z "${OPENSURGE_BASE_URL:-}" ]; then
 	lan_ip="$(sed -n 's/^[[:space:]]*lan_ip:[[:space:]]*"\{0,1\}\([0-9.]\{7,\}\)"\{0,1\}.*/\1/p' "$CONFIG" | head -1)"
 	if [ -z "$lan_ip" ]; then
@@ -21,6 +23,11 @@ if [ -z "${OPENSURGE_BASE_URL:-}" ]; then
 		exit 1
 	fi
 	OPENSURGE_BASE_URL="http://${lan_ip}:${ADDR##*:}"
+fi
+
+ALLOWED_HOSTS_ARGS=""
+if [ -n "${OPENSURGE_ALLOWED_HOSTS:-}" ]; then
+	ALLOWED_HOSTS_ARGS="--allowed-hosts=${OPENSURGE_ALLOWED_HOSTS}"
 fi
 
 mkdir -p "$STORE"
@@ -53,11 +60,15 @@ shutdown() {
 }
 trap shutdown TERM INT
 
-echo "Web GUI: $OPENSURGE_BASE_URL/enter （浏览器直连此地址；也可打开 ${OPENSURGE_BASE_URL} 会自动跳转 /enter）"
+echo "Web GUI: $OPENSURGE_BASE_URL/enter （浏览器直连 / 飞牛桌面窗口面板；也可打开 ${OPENSURGE_BASE_URL} 会自动跳转 /enter）"
+if [ -n "${OPENSURGE_ALLOWED_HOSTS:-}" ]; then
+	echo "Extra allowed hosts: $OPENSURGE_ALLOWED_HOSTS"
+fi
 echo "若需一次性 bootstrap 链接：scripts/fnos-gui-url.sh"
 
+# shellcheck disable=SC2086
 opensurge-control --direct-root --config "$CONFIG" --addr "$ADDR" \
-	--base-url "$OPENSURGE_BASE_URL" --store "$STORE" &
+	--base-url "$OPENSURGE_BASE_URL" --store "$STORE" ${ALLOWED_HOSTS_ARGS} &
 control_pid=$!
 
 # wait 会被信号打断，所以要循环等到子进程真的退出。

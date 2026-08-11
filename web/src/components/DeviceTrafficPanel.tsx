@@ -65,11 +65,12 @@ export function DeviceTrafficPanel({ gateway, traffic, history, error }: DeviceT
                 <span className="traffic-egress" title={device.primary_egress}><strong>{compactEgress(device.primary_egress)}</strong><small>{device.primary_egress || '暂无出口'}</small></span>
               </button>
             })}
-          </div> : <Empty text={traffic ? '暂无 DHCP、静态登记或当前流量观察到的 LAN 设备' : '正在读取设备流量…'} />}
+          </div> : <Empty text={traffic ? emptyDevicesText(traffic) : '正在读取设备流量…'} />}
           {traffic && <div className="traffic-summary">
             <strong>合计 {traffic.totals.devices} 台设备接入 · {traffic.totals.active_connections} 个连接 · ↑ {formatRate(traffic.totals.upload_rate)} · ↓ {formatRate(traffic.totals.download_rate)}</strong>
             {traffic.unidentified_device_connections > 0 && <small>其中 {traffic.unidentified_device_connections} 个待识别设备连接，仅确认了当前 LAN 源 IP。</small>}
-            {traffic.unclassified_connections > 0 && <small>另有 {traffic.unclassified_connections} 个连接无法判断来源，请在诊断中查看。</small>}
+            {traffic.unclassified_connections > 0 && <small>另有 {traffic.unclassified_connections} 个连接无法判断来源，请在诊断中查看 sourceIP。</small>}
+            {onlyLocalTrafficHint(traffic) && <small className="traffic-refresh-error">当前只有本机/假 IP 会话，未见局域网 sourceIP。旁路由请确认 transparent.tun_auto_redirect 已开启，并在诊断页核对连接源地址。</small>}
           </div>}
           {error && traffic && <small className="traffic-refresh-error">刷新失败：{error}</small>}
         </div>
@@ -89,6 +90,25 @@ export function DeviceTrafficPanel({ gateway, traffic, history, error }: DeviceT
 
 function RateCell({ rate = 0, total = 0 }: { rate?: number; total?: number }) {
   return <span className="traffic-rate"><strong>{formatRate(rate)}</strong><small>累计 {formatBytes(total)}</small></span>
+}
+
+function emptyDevicesText(traffic: DeviceTraffic) {
+  if (onlyLocalTrafficHint(traffic)) {
+    return '暂无 LAN 设备：mihomo 连接源不是局域网 IP（常见于旁路未进 TUN，sourceIP 为 198.18.x）。请打开诊断查看连接源地址。'
+  }
+  if (traffic.unclassified_connections > 0) {
+    return '暂无已识别的 LAN 设备；存在无法判断来源的连接，请在诊断中查看 sourceIP。'
+  }
+  return '暂无 DHCP、静态登记或当前流量观察到的 LAN 设备'
+}
+
+/** True when the gateway has local sessions but no attributed/observed LAN devices. */
+function onlyLocalTrafficHint(traffic: DeviceTraffic) {
+  const local = traffic.gateway_local?.active_connections ?? 0
+  return traffic.totals.devices === 0
+    && traffic.totals.active_connections === 0
+    && traffic.unidentified_device_connections === 0
+    && local > 0
 }
 
 function deviceName(device: DeviceTrafficRow) {
