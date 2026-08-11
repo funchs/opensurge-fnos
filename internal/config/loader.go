@@ -199,6 +199,12 @@ func applyValue(cfg *Config, section, key, value string) error {
 			return fmt.Errorf("transparent.tun_auto_detect_interface must be a boolean")
 		}
 		cfg.Transparent.TUNAutoDetectInterface = enabled
+	case "transparent.tun_auto_redirect":
+		enabled, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("transparent.tun_auto_redirect must be a boolean")
+		}
+		cfg.Transparent.TUNAutoRedirect = enabled
 	case "transparent.tun_strict_route":
 		enabled, err := strconv.ParseBool(value)
 		if err != nil {
