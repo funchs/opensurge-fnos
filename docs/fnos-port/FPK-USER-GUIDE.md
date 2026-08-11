@@ -149,7 +149,11 @@ docker load -i opensurge-v0.1.1.tar
 http://<NAS-IP>:61767/enter
 ```
 
-端口以向导填写为准。桌面图标默认也打开 **`/enter`**。
+端口以向导填写为准。
+
+**飞牛桌面窗口面板**：应用中心 / 桌面图标使用 `type=iframe` 打开同一地址（对齐
+[conversun/fnos-apps mihomo](https://github.com/conversun/fnos-apps/tree/main/apps/mihomo)），
+在 fnOS 自带窗口内嵌入管理界面，无需另开浏览器。
 
 ### 5.2 为什么不能只打开根路径？
 
@@ -169,6 +173,31 @@ http://<NAS-IP>:61767/enter
 | 端口 | 向导端口与 compose / 访问端口一致 |
 | 容器是否运行 | `docker ps \| grep opensurge` |
 | 浏览器 | 换无痕窗口，避免旧 cookie |
+| 域名访问 | 见下一节「外网域名 / 反代」 |
+
+### 5.2.1 外网域名 / 反代访问
+
+控制面默认只信任 **BaseURL 主机名**（通常是 `gateway.lan_ip`）和 loopback，防止
+DNS rebinding。要通过 **DDNS / 反代 / 自定义域名** 打开 GUI，任选其一：
+
+**方式 A — 把 BaseURL 设成域名（主入口就是域名）**
+
+```bash
+# docker compose 环境变量，或在应用数据目录改 compose 后重建
+OPENSURGE_BASE_URL=https://opensurge.example.com
+```
+
+**方式 B — 保留 LAN IP 为 BaseURL，额外放行域名**
+
+```bash
+OPENSURGE_BASE_URL=http://192.168.1.21:61767
+OPENSURGE_ALLOWED_HOSTS=opensurge.example.com,nas.local
+```
+
+`OPENSURGE_ALLOWED_HOSTS` 为逗号分隔的 Host 名（可写端口，会自动剥掉）。  
+反代时请把 `Host`（或正确的 `X-Forwarded-Host` 还原后的 Host）设为白名单内的域名。
+
+> 仍建议 **不要** 把 61767 明文 HTTP 直接映射到公网；优先内网、VPN 或带 TLS 的反代。
 
 ### 5.3 调试：手工签发 30 秒 bootstrap 链接
 
