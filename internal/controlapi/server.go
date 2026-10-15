@@ -238,7 +238,7 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	if options.RevealInFinder == nil {
-		options.RevealInFinder = revealPathInFinder
+		options.RevealInFinder = defaultRevealInFinder()
 	}
 	return &Server{
 		configPath:            configPath,
@@ -334,6 +334,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/network/restore-dhcp", s.auth(http.HandlerFunc(s.handleRestoreDHCP)))
 	mux.Handle("GET /api/v1/sources", s.auth(http.HandlerFunc(s.handleSources)))
 	mux.Handle("POST /api/v1/sources", s.auth(http.HandlerFunc(s.handleSources)))
+	mux.Handle("PATCH /api/v1/sources/{id}", s.auth(http.HandlerFunc(s.handleSourceUpdate)))
+	mux.Handle("DELETE /api/v1/sources/{id}", s.auth(http.HandlerFunc(s.handleSourceDelete)))
 	mux.Handle("POST /api/v1/sources/{id}/refresh", s.auth(http.HandlerFunc(s.handleSourceRefresh)))
 	mux.Handle("POST /api/v1/sources/{id}/apply", s.auth(http.HandlerFunc(s.handleSourceApply)))
 	mux.Handle("GET /api/v1/sources/{id}/preview", s.auth(http.HandlerFunc(s.handleSourcePreview)))
@@ -1760,7 +1762,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		sources = s.decorateSourceStates(sources)
 		revision := fileDigest(s.configPath)
 		w.Header().Set("ETag", `"`+revision+`"`)
-		writeJSON(w, http.StatusOK, map[string]any{"schema_version": SchemaVersion, "revision": revision, "sources": publicSources(sources, s.store.Dir())})
+		writeJSON(w, http.StatusOK, map[string]any{"schema_version": SchemaVersion, "revision": revision, "sources": publicSources(sources, s.store.Dir()), "file_reveal": sourceFileRevealEnabled()})
 		return
 	}
 	var source Source
@@ -1805,7 +1807,7 @@ func (s *Server) handleSourceRefresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "source_not_refreshable", "only HTTPS sources can be refreshed")
 		return
 	}
-	refreshed, err := s.importURL(r.Context(), SourceImportRequest{Name: source.Name, Kind: source.Kind, URL: fetchURL})
+	refreshed, err := s.importURL(r.Context(), SourceImportRequest{ID: source.ID, Name: source.Name, Kind: source.Kind, URL: fetchURL})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "source_refresh_failed", err.Error())
 		return

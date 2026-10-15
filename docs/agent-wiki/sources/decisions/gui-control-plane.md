@@ -6,8 +6,9 @@
 
 总览 GATEWAY 卡片直接使用 overview 的当前配置 `topology`，同时展示接口、LAN IPv4、
 接管模式与 desired/applied 状态；不能从 `recovery.topology` 猜当前模式，也不增加重复的
-网络上下文条。来源页的导入、刷新、完整校验/应用须在触发按钮上显示进行中状态，并在
-完成后保留成功或错误反馈，不能只用全页 disabled 表示受理。
+网络上下文条。来源页的导入、刷新、编辑、删除、完整校验/应用须在触发按钮上显示进行中状态，并在
+完成后保留成功或错误反馈，不能只用全页 disabled 表示受理。编辑只改名称和订阅地址；
+删除须确认，且不得把“从列表移除”说成已经停止网关。
 
 overview、menubar 和 state event 通过同一 `presentation` 契约提供展示状态，主窗口
 侧栏、总览卡和原生菜单栏消费该结果。底层 `status.gateway` 保持进程/运行时观测语义，
@@ -70,6 +71,9 @@ scrollbar track; thumbs use a low-opacity neutral green, including on hover.
 Language saves fence background preference refreshes until the
 mutation completes; async catalog preparation must recheck the request generation
 before updating the rendered language.
+
+LAN 浏览器入口默认是 `http://<NAS-or-LAN-IP>:port`，不是 secure context。
+不要依赖 `crypto.randomUUID` 或 `crypto.subtle`；操作 ID 在 HTTP 下也必须能生成。
 
 ## 网关操作与网络设置
 

@@ -110,6 +110,8 @@ vi.mock('./api', () => ({
     importURL: vi.fn(),
     importFile: vi.fn(),
     refreshSource: vi.fn(),
+    updateSource: vi.fn(),
+    deleteSource: vi.fn(),
     applySource: vi.fn(),
     sourceSnapshotLocation: vi.fn(),
     revealSourceSnapshot: vi.fn(),
@@ -1538,6 +1540,71 @@ describe('OpenSurge app shell', () => {
     await userEvent.click(screen.getByRole('button', { name: '导出 Home 可编辑副本' }))
     await waitFor(() => expect(api.exportSourceSnapshot).toHaveBeenCalledWith('home'))
     expect(await screen.findByText(`Home 已导出为可编辑副本，并在 Finder 中选中：${exported.display_path}`)).toBeTruthy()
+  })
+
+  it('edits an imported source name and optional subscription URL', async () => {
+    const source: Source = {
+      id: 'remote', name: 'Home', kind: 'mihomo_profile', origin: 'https://example.com/profile', digest: 'next', size: 100,
+      valid: true, validation: 'valid', desired: false, applied: false, versions: [], imported_at: '2026-07-15T00:00:00Z',
+      diff: { proxies_added: [], proxies_removed: [], groups_added: [], groups_removed: [], proxy_providers_added: [], proxy_providers_removed: [], rule_providers_added: [], rule_providers_removed: [], rule_count_delta: 0 },
+      inventory: { proxies: ['edge'], proxy_providers: [], proxy_groups: ['Main'], rule_providers: [], rule_count: 1, terminal_match: true, warnings: [] },
+    }
+    vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [source] })
+    vi.mocked(api.updateSource).mockResolvedValue({ ...source, name: 'Family' })
+    render(<App />)
+    await screen.findByRole('heading', { name: '全屋网关，一眼可见' })
+    await userEvent.click(screen.getByRole('button', { name: '代理与规则源' }))
+    await userEvent.click(await screen.findByRole('button', { name: '编辑 Home' }))
+    const dialog = screen.getByRole('dialog', { name: '编辑来源' })
+    const nameField = within(dialog).getByRole('textbox', { name: '来源名称' })
+    await userEvent.clear(nameField)
+    await userEvent.type(nameField, 'Family')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'HTTPS 订阅 URL' }), 'https://example.com/new')
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(api.updateSource).toHaveBeenCalledWith('remote', { name: 'Family', url: 'https://example.com/new' }))
+    expect(await screen.findByText('Family 的名称和订阅地址已更新。')).toBeTruthy()
+  })
+
+  it('confirms deletion of an applied source without claiming the gateway stopped', async () => {
+    const source: Source = {
+      id: 'home', name: '大碗高速', kind: 'mihomo_profile', origin: 'https://example.com/profile', digest: 'next', size: 100,
+      valid: true, validation: 'valid', desired: true, applied: true, versions: [], imported_at: '2026-07-15T00:00:00Z',
+      diff: { proxies_added: [], proxies_removed: [], groups_added: [], groups_removed: [], proxy_providers_added: [], proxy_providers_removed: [], rule_providers_added: [], rule_providers_removed: [], rule_count_delta: 0 },
+      inventory: { proxies: ['edge'], proxy_providers: [], proxy_groups: ['Main'], rule_providers: [], rule_count: 1, terminal_match: true, warnings: [] },
+    }
+    vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [source] })
+    vi.mocked(api.deleteSource).mockImplementation(async () => {
+      vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [] })
+    })
+    render(<App />)
+    await screen.findByRole('heading', { name: '全屋网关，一眼可见' })
+    await userEvent.click(screen.getByRole('button', { name: '代理与规则源' }))
+    await userEvent.click(await screen.findByRole('button', { name: '删除 大碗高速' }))
+    const dialog = screen.getByRole('dialog', { name: '删除来源？' })
+    expect(within(dialog).getByText(/删除不会停止网关/)).toBeTruthy()
+    await userEvent.click(within(dialog).getByRole('button', { name: '确认删除' }))
+    await waitFor(() => expect(api.deleteSource).toHaveBeenCalledWith('home'))
+    expect(await screen.findByText('大碗高速 已从已导入快照中删除。正在运行的网关配置未被改写。')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '大碗高速' })).toBeNull()
+  })
+
+  it('hides Finder reveal when the control plane does not support it', async () => {
+    const source: Source = {
+      id: 'home', name: 'Home', kind: 'mihomo_profile', origin: 'https://example.com/profile', digest: '1234567890abcdef', size: 100,
+      snapshot_display_path: 'OpenSurge/sources/home/12345678.yaml',
+      valid: true, validation: 'valid', desired: false, applied: false, versions: [], imported_at: '2026-07-15T00:00:00Z',
+      diff: { proxies_added: [], proxies_removed: [], groups_added: [], groups_removed: [], proxy_providers_added: [], proxy_providers_removed: [], rule_providers_added: [], rule_providers_removed: [], rule_count_delta: 0 },
+      inventory: { proxies: ['edge'], proxy_providers: [], proxy_groups: ['Main'], rule_providers: [], rule_count: 1, terminal_match: true, warnings: [] },
+    }
+    vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [source], file_reveal: false })
+    vi.mocked(api.exportSourceSnapshot).mockResolvedValue({ schema_version: 1, source_id: 'home', kind: 'editable_export', path: '/var/lib/opensurge/exports/Home.yaml', display_path: 'OpenSurge/exports/Home.yaml' })
+    render(<App />)
+    await screen.findByRole('heading', { name: '全屋网关，一眼可见' })
+    await userEvent.click(screen.getByRole('button', { name: '代理与规则源' }))
+    expect(await screen.findByRole('button', { name: '导出 Home 可编辑副本' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '在 Finder 中显示 Home 本地快照' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '导出 Home 可编辑副本' }))
+    expect(await screen.findByText('Home 已导出为可编辑副本：OpenSurge/exports/Home.yaml')).toBeTruthy()
   })
 
   it('confirms and applies a source through a running gateway reload', async () => {

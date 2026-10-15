@@ -74,7 +74,13 @@ JSDelivr-CF 入口，下载结果保存在 applied profile 所在数据目录供
 内容摘要，不能把任意持久化路径交给 Finder。管理快照只读，导出副本写入 Control Service
 用户数据目录下的 `exports/`，目录权限 `0700`、文件权限 `0600`，命名包含来源名、摘要短值
 和时间戳且不得覆盖旧文件。导出成功后用用户会话中的 Finder 选中新文件；如果 Finder
-调用失败，已经写出的副本必须保留，并在错误反馈中给出其显示路径。
+调用失败，已经写出的副本必须保留，并在错误反馈中给出其显示路径。非 darwin 控制面
+`GET /api/v1/sources` 的 `file_reveal` 为 false，GUI 不展示 Finder 动作，导出仍返回路径。
+
+`PATCH /api/v1/sources/{id}` 只改显示名称和/或 HTTPS 取回地址，source ID 保持不变，
+刷新必须继续写回同一 ID。完整 URL 仍只写入 `credentials/sources.json`，公开 origin
+继续去 userinfo/query/fragment。`DELETE /api/v1/sources/{id}` 从列表移除来源并删除
+其快照目录与凭据；它不停止网关，也不改写 desired/applied 配置。
 
 ## 配置与发现
 

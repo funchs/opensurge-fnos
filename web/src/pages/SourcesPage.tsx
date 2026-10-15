@@ -10,7 +10,7 @@ import { t } from '../i18n'
 
 type SourceAction =
   | { kind: 'import-url' | 'import-file' | 'apply'; sourceID?: string }
-  | { kind: 'refresh' | 'copy-path' | 'reveal' | 'export'; sourceID: string }
+  | { kind: 'refresh' | 'copy-path' | 'reveal' | 'export' | 'edit' | 'delete'; sourceID: string }
   | null
 
 export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overview | null; onChanged: () => void | Promise<void>; onNotify: (notification: OperationNotification) => void }) {
@@ -23,6 +23,11 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
   const [message, setMessage] = useState('')
   const [activeAction, setActiveAction] = useState<SourceAction>(null)
   const [pending, setPending] = useState<Source | null>(null)
+  const [editing, setEditing] = useState<Source | null>(null)
+  const [removing, setRemoving] = useState<Source | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editURL, setEditURL] = useState('')
+  const [fileReveal, setFileReveal] = useState(true)
   const [fileDragActive, setFileDragActive] = useState(false)
   const fileDragDepth = useRef(0)
   const running = overview?.status.gateway === 'running'
@@ -34,6 +39,7 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
       setSources(response.sources ?? [])
       setOverlay(profileOverlay)
       setRevision(response.revision)
+      setFileReveal(response.file_reveal !== false)
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -61,6 +67,56 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
     setPending(source)
     setMessage(t('已选择 {{name}}；确认后会先校验完整候选配置。', { name: source.name }))
     setError('')
+  }
+
+  const openEdit = (source: Source) => {
+    setEditing(source)
+    setEditName(source.name)
+    setEditURL('')
+    setError('')
+    setMessage('')
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    const selected = editing
+    const name = editName.trim()
+    if (!name) {
+      setError(t('来源名称不能为空。'))
+      return
+    }
+    const url = editURL.trim()
+    setActiveAction({ kind: 'edit', sourceID: selected.id })
+    setError('')
+    setMessage('')
+    try {
+      await api.updateSource(selected.id, url ? { name, url } : { name })
+      setEditing(null)
+      setMessage(t('{{name}} 的名称和订阅地址已更新。', { name }))
+      await refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setActiveAction(null)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!removing) return
+    const selected = removing
+    setActiveAction({ kind: 'delete', sourceID: selected.id })
+    setError('')
+    setMessage('')
+    try {
+      await api.deleteSource(selected.id)
+      setRemoving(null)
+      setMessage(t('{{name}} 已从已导入快照中删除。正在运行的网关配置未被改写。', { name: selected.name }))
+      await Promise.all([refresh(), Promise.resolve(onChanged())])
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setActiveAction(null)
+    }
   }
 
   const apply = async () => {
@@ -99,7 +155,7 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
         setMessage(t('{{name}} 的本地快照已在 Finder 中选中。', { name: source.name }))
       } else {
         const exported = await api.exportSourceSnapshot(source.id)
-        setMessage(t('{{name}} 已导出为可编辑副本，并在 Finder 中选中：{{path}}', { name: source.name, path: exported.display_path }))
+        setMessage(t(fileReveal ? '{{name}} 已导出为可编辑副本，并在 Finder 中选中：{{path}}' : '{{name}} 已导出为可编辑副本：{{path}}', { name: source.name, path: exported.display_path }))
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -213,7 +269,7 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
             </div>
             <div className="source-location-actions" aria-label={t('{{name}} 本地快照操作', { name: source.name })}>
               <button type="button" disabled={busy} aria-label={t('复制 {{name}} 本地快照路径', { name: source.name })} onClick={() => void runFileAction(source, 'copy-path')}><ActionLabel active={copyingPath} idle="复制路径" pending="复制中…" /></button>
-              <button type="button" disabled={busy} aria-label={t('在 Finder 中显示 {{name}} 本地快照', { name: source.name })} onClick={() => void runFileAction(source, 'reveal')}><ActionLabel active={revealing} idle="Finder 中显示" pending="正在打开…" /></button>
+              {fileReveal && <button type="button" disabled={busy} aria-label={t('在 Finder 中显示 {{name}} 本地快照', { name: source.name })} onClick={() => void runFileAction(source, 'reveal')}><ActionLabel active={revealing} idle="Finder 中显示" pending="正在打开…" /></button>}
               <button type="button" disabled={busy} aria-label={t('导出 {{name}} 可编辑副本', { name: source.name })} onClick={() => void runFileAction(source, 'export')}><ActionLabel active={exporting} idle="导出副本" pending="正在导出…" /></button>
             </div>
           </div>}
@@ -228,6 +284,10 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
 		  <div className={`source-validation ${overlayCompatible ? 'valid overlay' : 'invalid overlay'}`}><span aria-hidden="true">{overlayCompatible ? '✓' : '!'}</span><div><strong>{t(overlayCompatible ? '附加配置兼容' : '附加配置冲突')}</strong><small>{source.overlay_validation || t(overlayCompatible ? '当前来源可与附加配置组合' : '等待附加配置检查')}</small></div></div>
 		  {versions.length > 0 && <small className="source-history">{t('历史：')}{versions.slice(-3).map(version => `${version.digest.slice(0, 8)}${version.applied ? ` (${t('运行')})` : version.desired ? ` (${t('待应用')})` : ''}`).join(' · ')}</small>}
 		  <div className="source-actions">
+            <div className="source-actions-manage">
+              <button type="button" disabled={busy} aria-label={t('编辑 {{name}}', { name: source.name })} onClick={() => openEdit(source)}>{t('编辑')}</button>
+              <button className="danger" type="button" disabled={busy} aria-label={t('删除 {{name}}', { name: source.name })} onClick={() => { setRemoving(source); setError(''); setMessage('') }}>{t('删除')}</button>
+            </div>
 			{origin.startsWith('https://') && <button type="button" disabled={busy} onClick={() => void run({ kind: 'refresh', sourceID: source.id }, () => api.refreshSource(source.id), t('{{name}} 已刷新；新内容已保存为草稿。', { name: source.name }))}><ActionLabel active={refreshing} idle="刷新草稿" pending="正在刷新…" /></button>}
 			<button className="primary" type="button" disabled={busy || !revision || !source.valid || !overlayCompatible || (source.applied && !sourceNeedsOverlay) || (source.desired && !running && !sourceNeedsOverlay)} onClick={() => openApply(source)}>{action}</button>
           </div>
@@ -235,6 +295,24 @@ export function SourcesPage({ overview, onChanged, onNotify }: { overview: Overv
       })}</div> : <Empty text={t('尚未导入任何来源')} />}
     </section>
     <ProfileOverlayPanel overlay={overlay} sources={sources} onSaved={async saved => { setOverlay(saved); const response = await api.sources(); setSources(response.sources ?? []); setRevision(response.revision) }} />
+    {editing && <dialog className="reload-dialog" open aria-modal="true" aria-labelledby="source-edit-title">
+      <h2 id="source-edit-title">{t('编辑来源')}</h2>
+      <p>{t('只修改显示名称和订阅取回地址。管理快照仍只读；要改 YAML 请先导出副本，再作为本地文件重新导入。')}</p>
+      <label className="dialog-field"><span>{t('来源名称')}</span><input aria-label={t('来源名称')} value={editName} onChange={event => setEditName(event.target.value)} autoFocus /></label>
+      <label className="dialog-field"><span>{t('订阅地址')}</span><input aria-label={t('HTTPS 订阅 URL')} placeholder={editing.origin.startsWith('https://') ? editing.origin : 'https://…'} value={editURL} onChange={event => setEditURL(event.target.value)} /></label>
+      <p>{t('完整订阅地址含 token，界面不会回显。留空则保留现有地址。')}</p>
+      <div className="dialog-actions"><button type="button" disabled={busy} onClick={() => setEditing(null)}>{t('取消')}</button><button className="primary" type="button" disabled={busy || !editName.trim()} onClick={() => void saveEdit()}><ActionLabel active={activeAction?.kind === 'edit'} idle="保存" pending="正在保存…" /></button></div>
+    </dialog>}
+    {removing && <dialog className="reload-dialog" open aria-modal="true" aria-labelledby="source-delete-title">
+      <h2 id="source-delete-title">{t('删除来源？')}</h2>
+      <p>{t('将从已导入快照中删除「{{name}}」。本地快照、历史版本和订阅凭据会一并清除，且无法撤销。', { name: removing.name })}</p>
+      <ul>
+        {removing.applied && <li>{t('这是当前运行版本。删除不会停止网关，也不会改写正在运行的配置。')}</li>}
+        {removing.desired && !removing.applied && <li>{t('这是下次启动版本。删除不会改写已经保存的启动配置。')}</li>}
+        <li>{t('删除后不能从界面恢复；需要该订阅时请重新导入。')}</li>
+      </ul>
+      <div className="dialog-actions"><button type="button" disabled={busy} onClick={() => setRemoving(null)}>{t('取消')}</button><button className="danger" type="button" disabled={busy} onClick={() => void confirmDelete()}><ActionLabel active={activeAction?.kind === 'delete'} idle="确认删除" pending="正在删除…" /></button></div>
+    </dialog>}
     {pending && <dialog className="reload-dialog" open aria-modal="true" aria-labelledby="source-apply-title">
 	  <h2 id="source-apply-title">{t(running ? overlay?.document.enabled ? '应用来源与附加配置并重载网关？' : '应用订阅并重载网关？' : '设为下次启动版本？')}</h2>
 	  <p>{t(running ? overlay?.document.enabled ? 'OpenSurge 会组合订阅、全局附加配置和网关规则，验证完整候选配置后再短暂重启 DHCP/DNS、mihomo、PF 与 IPv4 forwarding。只有重载成功后才会标记为运行版本。' : 'OpenSurge 会验证完整候选配置后再短暂重启 DHCP/DNS、mihomo、PF 与 IPv4 forwarding。只有重载成功后才会标记为运行版本。' : overlay?.document.enabled ? '当前网关未运行。来源与全局附加配置的组合结果会保存为 desired 配置，并在下次启动成功后成为运行版本。' : '当前网关未运行。来源会保存为 desired 配置，并在下次启动成功后成为运行版本。')}</p>

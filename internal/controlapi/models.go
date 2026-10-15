@@ -427,6 +427,12 @@ type SourceImportRequest struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 	URL  string `json:"url"`
+	ID   string `json:"-"`
+}
+
+type SourceUpdateRequest struct {
+	Name *string `json:"name"`
+	URL  *string `json:"url"`
 }
 
 type ProfileOverlayResponse struct {

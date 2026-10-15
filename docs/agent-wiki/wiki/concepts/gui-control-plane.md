@@ -17,3 +17,6 @@ flowchart LR
 - 查询认证、配置事务、接口与操作进度 → [Control API](../../sources/control-api.md)。
 - 查询连接归属、流量采样和刷新范围 → [连接观察](../../sources/decisions/connection-observation.md)。
 - 查询开发运行与构建 → [开发说明](../../sources/development.md)。
+
+LAN HTTP 入口不是 secure context，操作 ID 不能只靠 `crypto.randomUUID`。
+来源卡片的编辑/删除只改订阅库，不停止网关。
