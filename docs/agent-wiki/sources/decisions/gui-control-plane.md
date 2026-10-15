@@ -71,6 +71,9 @@ Language saves fence background preference refreshes until the
 mutation completes; async catalog preparation must recheck the request generation
 before updating the rendered language.
 
+LAN 浏览器入口默认是 `http://<NAS-or-LAN-IP>:port`，不是 secure context。
+不要依赖 `crypto.randomUUID` 或 `crypto.subtle`；操作 ID 在 HTTP 下也必须能生成。
+
 ## 网关操作与网络设置
 
 Web GUI 总览页的“启动网关”与“停止网关”只导航到 `network` 页面，不得直接调用

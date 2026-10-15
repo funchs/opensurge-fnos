@@ -157,10 +157,24 @@ class OperationStatusUnknownError extends Error {
   constructor() { super(operationStatusUnknownMessage); this.name = 'OperationStatusUnknownError' }
 }
 
+// LAN HTTP (http://<NAS-IP>:port) is not a secure context, so randomUUID is
+// missing even though crypto.getRandomValues still works.
+function newOperationID(): string {
+  const webCrypto = globalThis.crypto
+  if (typeof webCrypto?.randomUUID === 'function') return webCrypto.randomUUID()
+  const bytes = new Uint8Array(16)
+  if (typeof webCrypto?.getRandomValues === 'function') webCrypto.getRandomValues(bytes)
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 // Tracking starts before the mutation is acknowledged. The same observer is
 // shared by the page awaiting completion and the global, navigation-safe card.
 async function trackedRequest<T>(kind: string, path: string, init: RequestInit, asynchronous = false): Promise<T> {
-  const id = crypto.randomUUID()
+  const id = newOperationID()
   const now = new Date().toISOString()
   recordOperation({ id, kind, state: 'running', phase: 'submitting', created_at: now, updated_at: now, phase_started_at: now })
   const response = request<T>(path, { ...init, headers: { ...init.headers, [asynchronous ? 'Idempotency-Key' : 'X-OpenSurge-Operation-ID']: id } })
