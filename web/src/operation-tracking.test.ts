@@ -146,6 +146,29 @@ describe('operation tracking and shared polling', () => {
     expect(await result).toMatchObject({ name: 'AbortError' })
   })
 
+  it('tracks apply-profile when crypto.randomUUID is missing', async () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues(target: Uint8Array) {
+        target.fill(0xab)
+        return target
+      },
+    })
+    let id = ''
+    const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path.endsWith('/sources/src-1/apply')) {
+        id = (init?.headers as Record<string, string>)['X-OpenSurge-Operation-ID']
+        expect((init?.headers as Record<string, string>)['If-Match']).toBe('"rev-1"')
+        return response({ id: 'src-1', applied: true })
+      }
+      return response({ id, kind: 'apply-profile', state: 'succeeded' })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    await expect(api.applySource('src-1', 'rev-1')).resolves.toMatchObject({ applied: true })
+    expect(id).toBe('abababab-abab-4bab-abab-abababababab')
+    expect(getOperation(id)?.state).toBe('succeeded')
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+  })
+
   it('does not resurrect completion with an older in-flight poll', () => {
     const operation = { id: 'completed', kind: 'start', state: 'succeeded' }
     recordOperation(operation)

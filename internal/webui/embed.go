@@ -1,10 +1,12 @@
 package webui
 
 import (
+	"bytes"
 	"embed"
 	"io/fs"
 	"net/http"
 	"path"
+	"runtime"
 	"strings"
 )
 
@@ -18,6 +20,23 @@ func FS() fs.FS {
 		panic(err)
 	}
 	return root
+}
+
+func runtimeEdition() string {
+	if runtime.GOOS == "linux" {
+		return "fnos"
+	}
+	return "mac"
+}
+
+func applyEditionBrand(index []byte, edition string) []byte {
+	if edition != "fnos" {
+		return index
+	}
+	index = bytes.ReplaceAll(index, []byte("<title>OpenSurge for Mac</title>"), []byte("<title>OpenSurge for fnOS</title>"))
+	index = bytes.ReplaceAll(index, []byte(`name="opensurge-edition" content="mac"`), []byte(`name="opensurge-edition" content="fnos"`))
+	index = bytes.ReplaceAll(index, []byte("/opensurge-icon.png"), []byte("/opensurge-fnos-icon.png"))
+	return index
 }
 
 func Handler() http.Handler {
@@ -36,7 +55,9 @@ func Handler() http.Handler {
 			http.Error(w, "Web UI is unavailable", http.StatusServiceUnavailable)
 			return
 		}
+		index = applyEditionBrand(index, runtimeEdition())
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(index)
 	})
 }
