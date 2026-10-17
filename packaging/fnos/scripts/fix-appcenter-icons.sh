@@ -8,7 +8,7 @@
 #
 # 新版薄荷绿满铺图标特征：ICON.PNG ≈ 3–5KB，ICON_256.PNG ≈ 20–30KB，
 # 四角接近 rgb(208,229,220)。若 ls 体积仍是 ~20KB/50KB 的旧 OS/蓝标，
-# 说明装到的不是最新 fpk——请装 opensurge_0.1.1_*.fpk。
+# 说明装到的不是最新 fpk——请装 opensurge_0.1.2_*.fpk。
 set -euo pipefail
 
 APPNAME="${APPNAME:-opensurge}"
@@ -55,7 +55,7 @@ fi
 
 if [ -z "$SRC64" ] || [ -z "$SRC256" ]; then
   echo "ERROR: could not find ICON / ui/images for ${APPNAME}"
-  echo "Reinstall opensurge_0.1.1_x86.fpk or _arm.fpk first."
+  echo "Reinstall opensurge_0.1.2_x86.fpk or _arm.fpk first."
   exit 1
 fi
 
@@ -135,4 +135,4 @@ echo "Done."
 echo "1) Browser: hard-refresh App Center (Ctrl/Cmd+Shift+R) or use a private window"
 echo "2) Or log out of fnOS web UI and log back in"
 echo "3) Confirm disk icons are NEW: ICON.PNG ~3–5KB, ICON_256 ~20–30KB"
-echo "   If still ~20KB/50KB → you installed an old fpk; install opensurge_0.1.1_*.fpk"
+echo "   If still ~20KB/50KB → you installed an old fpk; install opensurge_0.1.2_*.fpk"
