@@ -179,7 +179,13 @@ export type TailscaleDiscoveryResponse = {
   error?: string
 }
 
+export type ProductIdentity = {
+  name: string
+  edition: 'mac' | 'fnos'
+}
+
 export type Overview = {
+  product?: ProductIdentity
   presentation?: GatewayPresentation
   schema_version: number
   revision: string

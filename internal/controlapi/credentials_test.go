@@ -26,6 +26,15 @@ func TestFileCredentialStorePersistsRestrictedCredentials(t *testing.T) {
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("credential file mode=%v err=%v", modePerm(info), err)
 	}
+	if err := credentials.Delete(t.Context(), "source-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := credentials.Get(t.Context(), "source-1"); err == nil {
+		t.Fatal("deleted credential still readable")
+	}
+	if err := credentials.Delete(t.Context(), "source-1"); err != nil {
+		t.Fatalf("idempotent delete: %v", err)
+	}
 }
 
 func TestLegacyKeychainCredentialMigrationRunsOnce(t *testing.T) {
