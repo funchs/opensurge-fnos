@@ -7,8 +7,8 @@
 
 | 架构 | 安装包 |
 | --- | --- |
-| Intel / AMD | [opensurge_0.1.1_x86.fpk](https://github.com/funchs/opensurge-fnos/releases/download/v0.1.1/opensurge_0.1.1_x86.fpk) |
-| ARM64 | [opensurge_0.1.1_arm.fpk](https://github.com/funchs/opensurge-fnos/releases/download/v0.1.1/opensurge_0.1.1_arm.fpk) |
+| Intel / AMD | [opensurge_0.1.2_x86.fpk](https://github.com/funchs/opensurge-fnos/releases/download/v0.1.2/opensurge_0.1.2_x86.fpk) |
+| ARM64 | [opensurge_0.1.2_arm.fpk](https://github.com/funchs/opensurge-fnos/releases/download/v0.1.2/opensurge_0.1.2_arm.fpk) |
 
 发布页：<https://github.com/funchs/opensurge-fnos/releases/latest>
 
@@ -21,7 +21,7 @@
 5. 打开 GUI：浏览器访问 `http://<NAS-IP>:61767/enter`，或 FN Connect
    `https://opensurge.<FNID>.fnos.net/`（见 `docs/fnos-port/FPK-USER-GUIDE.md` §5.2.1）
 
-镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.1`（与 fpk 版本号一致）。  
+镜像：`ghcr.io/funchs/opensurge-fnos:v0.1.2`（与 fpk 版本号一致）。  
 若 NAS 拉不到 ghcr，在可联网机器上 `docker pull` + `docker save`，再在 NAS 上 `docker load`。
 
 ## 旁路由客户端
