@@ -19,7 +19,7 @@
 > **v0.3.0 Verdilion** (device workbench, connections page, policy workspace,
 > Tailscale outbound, source snapshot export). Delivery:
 >
-> - Docker image `ghcr.io/funchs/opensurge-fnos:v0.1.1` (`linux/amd64` + `linux/arm64`)
+> - Docker image `ghcr.io/funchs/opensurge-fnos:v0.1.2` (`linux/amd64` + `linux/arm64`)
 > - Optional **fnOS App Center `.fpk`** package (recommended for end users)
 >
 > | Audience | Doc |
