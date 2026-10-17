@@ -110,6 +110,8 @@ vi.mock('./api', () => ({
     importURL: vi.fn(),
     importFile: vi.fn(),
     refreshSource: vi.fn(),
+    updateSource: vi.fn(),
+    deleteSource: vi.fn(),
     applySource: vi.fn(),
     sourceSnapshotLocation: vi.fn(),
     revealSourceSnapshot: vi.fn(),
@@ -133,6 +135,11 @@ vi.mock('./api', () => ({
     doctorStatus: vi.fn(async () => ({ schema_version: 1, state: 'idle', current: true, checks: [], healthy: false })),
     runDoctor: vi.fn(),
     diagnostics: vi.fn(async () => ({ revision: 'r', connections: { upload_total: 0, download_total: 0, connections: [] }, logs: {}, operations: [], recovery: { stage: 'idle', required: false } })),
+    sessionStatus: vi.fn(async () => ({ schema_version: 1, gui_password_required: false, password_configured: false, authenticated: false })),
+    setupGUIPassword: vi.fn(),
+    loginGUI: vi.fn(),
+    logoutGUI: vi.fn(),
+    changeGUIPassword: vi.fn(),
   },
 }))
 
@@ -243,6 +250,7 @@ describe('OpenSurge app shell', () => {
     scrollIntoView.mockReset()
     scrollTo.mockReset()
     vi.mocked(api.overview).mockResolvedValue(overview)
+    vi.mocked(api.sessionStatus).mockResolvedValue({ schema_version: 1, gui_password_required: false, password_configured: false, authenticated: false })
     vi.mocked(api.config).mockResolvedValue(configFor('same_wifi_dhcp'))
     vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [] })
     vi.mocked(api.profileOverlay).mockResolvedValue(overlayForApp())
@@ -282,7 +290,7 @@ describe('OpenSurge app shell', () => {
     vi.mocked(api.overview).mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
       .mockResolvedValueOnce({ ...overview, status: { ...overview.status, gateway: 'running' }, presentation: { state: 'running', busy: false, config_pending: false, diagnosis_warning: false } })
     render(<App />)
-    expect(screen.getByRole('button', { name: '快捷设置：正在连接…' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '快捷设置：正在连接…' })).toBeTruthy()
     act(() => recordOperation({ id: 'status-race', kind: 'start', state: 'succeeded', created_at: new Date().toISOString() }))
     await screen.findByRole('button', { name: '快捷设置：正在运行' })
     await act(async () => release({ ...overview, status: { ...overview.status, gateway: 'degraded' } }))
@@ -307,16 +315,38 @@ describe('OpenSurge app shell', () => {
       close() { close() }
     }
     vi.stubGlobal('EventSource', TestEventSource)
-    vi.mocked(api.overview).mockRejectedValueOnce(new RequestError(401, 'authentication_required', 'expired'))
-    window.sessionStorage.setItem('opensurge-enter-attempted', '1')
+    vi.mocked(api.overview).mockRejectedValue(new RequestError(401, 'authentication_required', 'expired'))
 
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Web GUI 与 OpenSurge 的安全连接已过期' })).toBeTruthy()
-    expect(screen.getByText('局域网部署请打开 /enter 重新建立会话；桌面版请从菜单栏重新打开面板。')).toBeTruthy()
-    expect(screen.getByRole('link', { name: '/enter' })).toBeTruthy()
+    expect(screen.getByText('局域网部署请打开 /login 重新登录；桌面版请从菜单栏重新打开面板。')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '/login' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
     await waitFor(() => expect(close).toHaveBeenCalled())
+  })
+
+  it('shows setup when LAN GUI has no panel password', async () => {
+    vi.mocked(api.sessionStatus).mockResolvedValue({ schema_version: 1, gui_password_required: true, password_configured: false, authenticated: false })
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: '设置面板密码' })).toBeTruthy()
+    expect(api.overview).not.toHaveBeenCalled()
+  })
+
+  it('shows login when LAN GUI password is set', async () => {
+    vi.mocked(api.sessionStatus).mockResolvedValue({ schema_version: 1, gui_password_required: true, password_configured: true, authenticated: false })
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeTruthy()
+    expect(api.overview).not.toHaveBeenCalled()
+  })
+
+  it('shows panel password controls after a LAN session is authenticated', async () => {
+    vi.mocked(api.sessionStatus).mockResolvedValue({ schema_version: 1, gui_password_required: true, password_configured: true, authenticated: true })
+    render(<App />)
+    const disclosure = await screen.findByRole('button', { name: /^快捷设置：/ })
+    await userEvent.click(disclosure)
+    expect(screen.getByText('修改面板密码')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '退出登录' })).toBeTruthy()
   })
 
   it('keeps flat status visible and exposes quick controls only when expanded', async () => {
@@ -401,19 +431,34 @@ describe('OpenSurge app shell', () => {
     expect(api.saveConfig).not.toHaveBeenCalled()
   })
 
+  it('shows fnOS brand and hides Mac lid-closed sleep when overview reports fnOS', async () => {
+    vi.mocked(api.overview).mockResolvedValue({ ...overview, product: { name: 'OpenSurge', edition: 'fnos' } })
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: '全屋网关，一眼可见' })).toBeTruthy()
+    await waitFor(() => expect(document.querySelector<HTMLImageElement>('img.brand-mark')?.getAttribute('src')).toBe('/opensurge-fnos-icon.png'))
+    const brandIcon = document.querySelector<HTMLImageElement>('img.brand-mark')
+    expect(brandIcon?.getAttribute('src')).toBe('/opensurge-fnos-icon.png')
+    expect(document.querySelector('.brand')?.textContent).toBe('OpenSurgefor fnOS')
+    await waitFor(() => expect(document.title).toBe('OpenSurge for fnOS'))
+    expect(screen.queryByText('合盖保持运行')).toBeNull()
+  })
+
   it('does not present a saved recovery card as an unfinished network recovery', async () => {
     render(<App />)
+    await screen.findByRole('button', { name: /^快捷设置：/ })
     const brandIcon = document.querySelector<HTMLImageElement>('img.brand-mark')
     expect(brandIcon?.getAttribute('src')).toBe('/opensurge-icon.png')
     const brand = document.querySelector('.brand')
     expect(brand?.textContent).toBe('OpenSurgefor Mac')
     expect(brand?.querySelector('.brand-series')).toBeNull()
+    expect(document.title).toBe('OpenSurge for Mac')
     const sidebarStatus = document.querySelector('.sidebar-status')
     expect(sidebarStatus?.querySelector('small')?.textContent).toBe(`${import.meta.env.VITE_OPENSURGE_RELEASE_TAG} Verdilion`)
     expect(sidebarStatus?.querySelectorAll('small')).toHaveLength(1)
     expect(sidebarStatus?.textContent).not.toContain('192.168.1.20')
     expect(document.querySelector('.sidebar-release')).toBeNull()
     expect(await screen.findByRole('heading', { name: '全屋网关，一眼可见' })).toBeTruthy()
+    expect(screen.getByText('合盖保持运行')).toBeTruthy()
     const gateway = screen.getByRole('article', { name: '网关状态' })
     expect(within(gateway).getByText('en0 · 192.168.1.20')).toBeTruthy()
     expect(within(gateway).getByText('接管模式')).toBeTruthy()
@@ -896,7 +941,7 @@ describe('OpenSurge app shell', () => {
   it('does not label an active takeover as unfinished network recovery', async () => {
     vi.mocked(api.overview).mockResolvedValue({ ...overview, status: { ...overview.status, gateway: 'running' }, recovery: { ...overview.recovery, stage: 'gateway_active' } })
     render(<App />)
-    expect(await screen.findByRole('heading', { name: '全屋网关，一眼可见' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '快捷设置：正在运行' })).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getAllByText('正在运行').length).toBeGreaterThan(0)
   })
@@ -1538,6 +1583,71 @@ describe('OpenSurge app shell', () => {
     await userEvent.click(screen.getByRole('button', { name: '导出 Home 可编辑副本' }))
     await waitFor(() => expect(api.exportSourceSnapshot).toHaveBeenCalledWith('home'))
     expect(await screen.findByText(`Home 已导出为可编辑副本，并在 Finder 中选中：${exported.display_path}`)).toBeTruthy()
+  })
+
+  it('edits an imported source name and optional subscription URL', async () => {
+    const source: Source = {
+      id: 'remote', name: 'Home', kind: 'mihomo_profile', origin: 'https://example.com/profile', digest: 'next', size: 100,
+      valid: true, validation: 'valid', desired: false, applied: false, versions: [], imported_at: '2026-07-15T00:00:00Z',
+      diff: { proxies_added: [], proxies_removed: [], groups_added: [], groups_removed: [], proxy_providers_added: [], proxy_providers_removed: [], rule_providers_added: [], rule_providers_removed: [], rule_count_delta: 0 },
+      inventory: { proxies: ['edge'], proxy_providers: [], proxy_groups: ['Main'], rule_providers: [], rule_count: 1, terminal_match: true, warnings: [] },
+    }
+    vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [source] })
+    vi.mocked(api.updateSource).mockResolvedValue({ ...source, name: 'Family' })
+    render(<App />)
+    await screen.findByRole('heading', { name: '全屋网关，一眼可见' })
+    await userEvent.click(screen.getByRole('button', { name: '代理与规则源' }))
+    await userEvent.click(await screen.findByRole('button', { name: '编辑 Home' }))
+    const dialog = screen.getByRole('dialog', { name: '编辑来源' })
+    const nameField = within(dialog).getByRole('textbox', { name: '来源名称' })
+    await userEvent.clear(nameField)
+    await userEvent.type(nameField, 'Family')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'HTTPS 订阅 URL' }), 'https://example.com/new')
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(api.updateSource).toHaveBeenCalledWith('remote', { name: 'Family', url: 'https://example.com/new' }))
+    expect(await screen.findByText('Family 的名称和订阅地址已更新。')).toBeTruthy()
+  })
+
+  it('confirms deletion of an applied source without claiming the gateway stopped', async () => {
+    const source: Source = {
+      id: 'home', name: '大碗高速', kind: 'mihomo_profile', origin: 'https://example.com/profile', digest: 'next', size: 100,
+      valid: true, validation: 'valid', desired: true, applied: true, versions: [], imported_at: '2026-07-15T00:00:00Z',
+      diff: { proxies_added: [], proxies_removed: [], groups_added: [], groups_removed: [], proxy_providers_added: [], proxy_providers_removed: [], rule_providers_added: [], rule_providers_removed: [], rule_count_delta: 0 },
+      inventory: { proxies: ['edge'], proxy_providers: [], proxy_groups: ['Main'], rule_providers: [], rule_count: 1, terminal_match: true, warnings: [] },
+    }
+    vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [source] })
+    vi.mocked(api.deleteSource).mockImplementation(async () => {
+      vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [] })
+    })
+    render(<App />)
+    await screen.findByRole('heading', { name: '全屋网关，一眼可见' })
+    await userEvent.click(screen.getByRole('button', { name: '代理与规则源' }))
+    await userEvent.click(await screen.findByRole('button', { name: '删除 大碗高速' }))
+    const dialog = screen.getByRole('dialog', { name: '删除来源？' })
+    expect(within(dialog).getByText(/删除不会停止网关/)).toBeTruthy()
+    await userEvent.click(within(dialog).getByRole('button', { name: '确认删除' }))
+    await waitFor(() => expect(api.deleteSource).toHaveBeenCalledWith('home'))
+    expect(await screen.findByText('大碗高速 已从已导入快照中删除。正在运行的网关配置未被改写。')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '大碗高速' })).toBeNull()
+  })
+
+  it('hides Finder reveal when the control plane does not support it', async () => {
+    const source: Source = {
+      id: 'home', name: 'Home', kind: 'mihomo_profile', origin: 'https://example.com/profile', digest: '1234567890abcdef', size: 100,
+      snapshot_display_path: 'OpenSurge/sources/home/12345678.yaml',
+      valid: true, validation: 'valid', desired: false, applied: false, versions: [], imported_at: '2026-07-15T00:00:00Z',
+      diff: { proxies_added: [], proxies_removed: [], groups_added: [], groups_removed: [], proxy_providers_added: [], proxy_providers_removed: [], rule_providers_added: [], rule_providers_removed: [], rule_count_delta: 0 },
+      inventory: { proxies: ['edge'], proxy_providers: [], proxy_groups: ['Main'], rule_providers: [], rule_count: 1, terminal_match: true, warnings: [] },
+    }
+    vi.mocked(api.sources).mockResolvedValue({ revision: 'config-revision', sources: [source], file_reveal: false })
+    vi.mocked(api.exportSourceSnapshot).mockResolvedValue({ schema_version: 1, source_id: 'home', kind: 'editable_export', path: '/var/lib/opensurge/exports/Home.yaml', display_path: 'OpenSurge/exports/Home.yaml' })
+    render(<App />)
+    await screen.findByRole('heading', { name: '全屋网关，一眼可见' })
+    await userEvent.click(screen.getByRole('button', { name: '代理与规则源' }))
+    expect(await screen.findByRole('button', { name: '导出 Home 可编辑副本' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '在 Finder 中显示 Home 本地快照' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '导出 Home 可编辑副本' }))
+    expect(await screen.findByText('Home 已导出为可编辑副本：OpenSurge/exports/Home.yaml')).toBeTruthy()
   })
 
   it('confirms and applies a source through a running gateway reload', async () => {

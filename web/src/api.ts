@@ -1,4 +1,4 @@
-import type { APIError, ConnectionObservation, ConnectionRefreshResult, ConnectivityResponse, ControlConfig, DevicePolicyDocument, DevicesResponse, DeviceTraffic, Diagnostics, DoctorRunStatus, GatewayPlan, LocalRouting, LocalRoutingMode, NetworkDefaults, NetworkInterfacesResponse, Operation, Overview, PolicySet, PolicyWorkspaceRequest, PolicyWorkspaceSnapshot, ProfileOverlay, ProfileOverlayDocument, ProfileOverlayPreview, ProxyGroup, ProxyHealthSnapshot, ProxyHealthTestResponse, SleepPreventionStatus, Source, SourceSnapshotFile, TailscaleDiscoveryResponse, TailscaleResponse, TailscaleUpdate, UIPreferences } from './types'
+import type { APIError, ConnectionObservation, ConnectionRefreshResult, ConnectivityResponse, ControlConfig, DevicePolicyDocument, DevicesResponse, DeviceTraffic, Diagnostics, DoctorRunStatus, GatewayPlan, LocalRouting, LocalRoutingMode, NetworkDefaults, NetworkInterfacesResponse, Operation, Overview, PolicySet, PolicyWorkspaceRequest, PolicyWorkspaceSnapshot, ProfileOverlay, ProfileOverlayDocument, ProfileOverlayPreview, ProxyGroup, ProxyHealthSnapshot, ProxyHealthTestResponse, SessionStatus, SleepPreventionStatus, Source, SourceSnapshotFile, TailscaleDiscoveryResponse, TailscaleResponse, TailscaleUpdate, UIPreferences } from './types'
 import { getOperation, markOperationConnection, operationStatusUnknownMessage, recordOperation } from './operations'
 import { desktopAction, desktopHeaders, isDesktop } from './desktop'
 import { t } from './i18n'
@@ -12,6 +12,10 @@ export class RequestError extends Error {
 
 export const authenticationRequiredEvent = 'opensurge:authentication-required'
 
+function skipAuthenticationEvent(path: string): boolean {
+  return path === '/api/v1/session/login' || path === '/api/v1/session/setup' || path === '/api/v1/session/status' || path === '/api/v1/session/password'
+}
+
 async function controlResponse(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(path, {
     credentials: 'same-origin',
@@ -19,7 +23,7 @@ async function controlResponse(path: string, init?: RequestInit): Promise<Respon
     headers: { ...desktopHeaders(), ...(init?.body instanceof FormData ? init.headers : { 'Content-Type': 'application/json', ...init?.headers }) },
   })
   if (!response.ok) {
-    if (response.status === 401) window.dispatchEvent(new Event(authenticationRequiredEvent))
+    if (response.status === 401 && !skipAuthenticationEvent(path)) window.dispatchEvent(new Event(authenticationRequiredEvent))
     let payload: APIError = {}
     try { payload = await response.json() as APIError } catch { /* response was not JSON */ }
     const message = payload.error?.code === 'desktop_service_unavailable'
@@ -81,6 +85,11 @@ async function operationStatusRequest<T>(path: string): Promise<T> {
 
 export const api = {
   recoveryCard: async () => (await controlResponse('/api/v1/recovery/card')).text(),
+  sessionStatus: () => request<SessionStatus>('/api/v1/session/status'),
+  setupGUIPassword: async (password: string) => { await controlResponse('/api/v1/session/setup', { method: 'POST', body: JSON.stringify({ password }) }) },
+  loginGUI: async (password: string) => { await controlResponse('/api/v1/session/login', { method: 'POST', body: JSON.stringify({ password }) }) },
+  logoutGUI: async () => { await controlResponse('/api/v1/session/logout', { method: 'POST' }) },
+  changeGUIPassword: async (current: string, next: string) => { await controlResponse('/api/v1/session/password', { method: 'PUT', body: JSON.stringify({ current, next }) }) },
   overview: () => request<Overview>('/api/v1/overview'),
   uiPreferences: () => request<UIPreferences>('/api/v1/ui-preferences'),
   config: () => request<ControlConfig>('/api/v1/config'),
@@ -107,7 +116,7 @@ export const api = {
   restoreMacDHCP: () => request('/api/v1/network/restore-dhcp', { method: 'POST' }),
   validateClient: (clientIPv4: string, ipv6Acknowledged: boolean) => request('/api/v1/recovery/client-validated', { method: 'POST', body: JSON.stringify({ client_ipv4: clientIPv4, gateway_dns_confirmed: true, no_explicit_proxy_confirmed: true, ipv6_bypass_warning_confirmed: ipv6Acknowledged }) }),
   skipClientValidation: () => request('/api/v1/recovery/client-validation-skip', { method: 'POST', body: JSON.stringify({ skip_confirmed: true }) }),
-  sources: () => request<{ revision: string; sources: Source[] }>('/api/v1/sources'),
+  sources: () => request<{ revision: string; sources: Source[]; file_reveal?: boolean }>('/api/v1/sources'),
   importURL: (name: string, url: string) => request<Source>('/api/v1/sources', { method: 'POST', body: JSON.stringify({ name, kind: 'mihomo_profile', url }) }),
   importFile: (file: File) => {
     const data = new FormData()
@@ -117,6 +126,8 @@ export const api = {
     return request<Source>('/api/v1/sources', { method: 'POST', body: data })
   },
   refreshSource: (id: string) => request<Source>(`/api/v1/sources/${id}/refresh`, { method: 'POST' }),
+  updateSource: (id: string, update: { name?: string; url?: string }) => request<Source>(`/api/v1/sources/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(update) }),
+  deleteSource: async (id: string) => { await controlResponse(`/api/v1/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
   applySource: (id: string, revision: string) => trackedRequest<Source>('apply-profile', `/api/v1/sources/${id}/apply`, { method: 'POST', headers: { 'If-Match': `"${revision}"` } }),
   sourceSnapshotLocation: (id: string) => request<SourceSnapshotFile>(`/api/v1/sources/${encodeURIComponent(id)}/snapshot-location`),
   revealSourceSnapshot: (id: string) => request<SourceSnapshotFile>(`/api/v1/sources/${encodeURIComponent(id)}/reveal`, { method: 'POST' }),
@@ -157,10 +168,24 @@ class OperationStatusUnknownError extends Error {
   constructor() { super(operationStatusUnknownMessage); this.name = 'OperationStatusUnknownError' }
 }
 
+// LAN HTTP (http://<NAS-IP>:port) is not a secure context, so randomUUID is
+// missing even though crypto.getRandomValues still works.
+function newOperationID(): string {
+  const webCrypto = globalThis.crypto
+  if (typeof webCrypto?.randomUUID === 'function') return webCrypto.randomUUID()
+  const bytes = new Uint8Array(16)
+  if (typeof webCrypto?.getRandomValues === 'function') webCrypto.getRandomValues(bytes)
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 // Tracking starts before the mutation is acknowledged. The same observer is
 // shared by the page awaiting completion and the global, navigation-safe card.
 async function trackedRequest<T>(kind: string, path: string, init: RequestInit, asynchronous = false): Promise<T> {
-  const id = crypto.randomUUID()
+  const id = newOperationID()
   const now = new Date().toISOString()
   recordOperation({ id, kind, state: 'running', phase: 'submitting', created_at: now, updated_at: now, phase_started_at: now })
   const response = request<T>(path, { ...init, headers: { ...init.headers, [asynchronous ? 'Idempotency-Key' : 'X-OpenSurge-Operation-ID']: id } })

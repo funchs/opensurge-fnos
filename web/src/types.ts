@@ -179,7 +179,13 @@ export type TailscaleDiscoveryResponse = {
   error?: string
 }
 
+export type ProductIdentity = {
+  name: string
+  edition: 'mac' | 'fnos'
+}
+
 export type Overview = {
+  product?: ProductIdentity
   presentation?: GatewayPresentation
   schema_version: number
   revision: string
@@ -202,6 +208,13 @@ export type Overview = {
   mihomo_recovery?: MihomoRecoveryStatus
   sleep_prevention?: SleepPreventionStatus
   ui_preferences?: UIPreferences
+}
+
+export type SessionStatus = {
+  schema_version: number
+  gui_password_required: boolean
+  password_configured: boolean
+  authenticated: boolean
 }
 
 export type RequestedLanguage = 'system' | 'zh-Hans' | 'en'

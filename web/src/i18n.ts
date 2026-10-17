@@ -31,7 +31,7 @@ const english: Record<string, string> = {
   '深色模式': 'Dark mode',
   'Web GUI 与 OpenSurge 的安全连接已过期': 'The secure connection between the Web GUI and OpenSurge has expired',
   '请点击 macOS 菜单栏中的 OpenSurge 图标，然后选择“打开 OpenSurge 面板”。': 'Click the OpenSurge icon in the macOS menu bar, then choose “Open OpenSurge Dashboard”.',
-  '局域网部署请打开 /enter 重新建立会话；桌面版请从菜单栏重新打开面板。': 'For LAN access, open /enter to start a new session. On the desktop app, reopen the panel from the menu bar.',
+  '局域网部署请打开 /login 重新登录；桌面版请从菜单栏重新打开面板。': 'For LAN access, open /login to sign in again. On the desktop app, reopen the panel from the menu bar.',
   '重试': 'Retry',
   '正在重新连接后台服务，当前页面已保留。连接恢复后，请重新执行未完成的操作。': 'Reconnecting to the background service. Your current page is preserved. Retry unfinished actions after the connection is restored.',
   '桌面操作未完成，请重试。': 'The desktop action could not be completed. Please try again.',

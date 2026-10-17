@@ -57,6 +57,21 @@ describe('Control API requests', () => {
       code: 'authentication_required',
     })
     expect(listener).toHaveBeenCalledOnce()
+    window.removeEventListener(authenticationRequiredEvent, listener)
+  })
+
+  it('does not announce expiry for a failed GUI login', async () => {
+    const listener = vi.fn()
+    window.addEventListener(authenticationRequiredEvent, listener)
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      json: async () => ({ error: { code: 'invalid_password', message: 'password is incorrect' } }),
+    })))
+    await expect(api.loginGUI('wrong-password-xx')).rejects.toMatchObject({ status: 401, code: 'invalid_password' })
+    expect(listener).not.toHaveBeenCalled()
+    window.removeEventListener(authenticationRequiredEvent, listener)
   })
 
   it('uses the policy workspace endpoint for read, selection, and delay tests', async () => {
