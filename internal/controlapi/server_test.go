@@ -1133,6 +1133,107 @@ func TestPublicSourcesAddsManagedDisplayPath(t *testing.T) {
 	}
 }
 
+func TestImportedSourceKeepsStableIDWhenRenamedThenReimported(t *testing.T) {
+	server := newTestServer(t)
+	first, err := server.importReader("old-name", "mihomo_profile", "https://example.com/profile", strings.NewReader("rules:\n  - MATCH,DIRECT\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := server.importReaderID(first.ID, "new-name", "mihomo_profile", "https://example.com/profile", strings.NewReader("proxies:\n  - {name: edge, type: direct}\nrules:\n  - MATCH,DIRECT\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != first.ID {
+		t.Fatalf("id changed after rename reimport: got %s want %s", updated.ID, first.ID)
+	}
+	if updated.Name != "new-name" {
+		t.Fatalf("name=%q", updated.Name)
+	}
+	stored, err := server.store.Sources()
+	if err != nil || len(stored) != 1 || stored[0].ID != first.ID {
+		t.Fatalf("stored=%#v err=%v", stored, err)
+	}
+}
+
+func TestSourceUpdateRenamesAndRebindsHTTPSURL(t *testing.T) {
+	server := newTestServer(t)
+	source, err := server.importReader("home", "mihomo_profile", "https://example.com/profile", strings.NewReader("rules:\n  - MATCH,DIRECT\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.credentials.Put(t.Context(), source.ID, "https://token@example.com/profile?secret=1"); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(`{"name":"Family","url":"https://token@example.com/new?secret=2"}`)
+	response := performAuthorized(server, http.MethodPatch, "/api/v1/sources/"+source.ID, body)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var updated Source
+	if err := json.Unmarshal(response.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != source.ID || updated.Name != "Family" || updated.Origin != "https://example.com/new" || updated.FetchURL != "" {
+		t.Fatalf("updated=%#v", updated)
+	}
+	if value, err := server.credentials.Get(t.Context(), source.ID); err != nil || value != "https://token@example.com/new?secret=2" {
+		t.Fatalf("credential=%q err=%v", value, err)
+	}
+}
+
+func TestSourceUpdateRejectsEmptyPatchAndInvalidURL(t *testing.T) {
+	server := newTestServer(t)
+	source, err := server.importReader("home", "mihomo_profile", "file:home.yaml", strings.NewReader("rules:\n  - MATCH,DIRECT\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := performAuthorized(server, http.MethodPatch, "/api/v1/sources/"+source.ID, []byte(`{}`))
+	if empty.Code != http.StatusBadRequest {
+		t.Fatalf("empty status=%d body=%s", empty.Code, empty.Body.String())
+	}
+	invalid := performAuthorized(server, http.MethodPatch, "/api/v1/sources/"+source.ID, []byte(`{"url":"http://example.com/profile"}`))
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "HTTPS") {
+		t.Fatalf("invalid url status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestSourceDeleteRemovesSnapshotAndCredentialWithoutTouchingConfig(t *testing.T) {
+	server := newTestServer(t)
+	source, err := server.importReader("home", "mihomo_profile", "https://example.com/profile", strings.NewReader("rules:\n  - MATCH,DIRECT\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.credentials.Put(t.Context(), source.ID, "https://token@example.com/profile?secret=1"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(server.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := performAuthorized(server, http.MethodDelete, "/api/v1/sources/"+source.ID, nil)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	stored, err := server.store.Sources()
+	if err != nil || len(stored) != 0 {
+		t.Fatalf("stored=%#v err=%v", stored, err)
+	}
+	if _, err := server.credentials.Get(t.Context(), source.ID); err == nil {
+		t.Fatal("credential still present")
+	}
+	if _, err := os.Stat(filepath.Join(server.store.Dir(), "sources", source.ID)); !os.IsNotExist(err) {
+		t.Fatalf("snapshot dir remains: %v", err)
+	}
+	after, err := os.ReadFile(server.configPath)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("config changed after source delete: %s err=%v", after, err)
+	}
+	missing := performAuthorized(server, http.MethodDelete, "/api/v1/sources/"+source.ID, nil)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing status=%d body=%s", missing.Code, missing.Body.String())
+	}
+}
+
 func TestHTTPSSourceMetadataNeverPersistsFetchURL(t *testing.T) {
 	server := newTestServer(t)
 	source, err := server.importReader("subscription", "mihomo_profile", "https://example.com/profile", strings.NewReader("rules:\n  - MATCH,DIRECT\n"))
