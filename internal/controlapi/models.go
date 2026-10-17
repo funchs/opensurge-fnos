@@ -25,6 +25,7 @@ type ErrorResponse struct {
 }
 
 type Overview struct {
+	Product              ProductIdentity          `json:"product"`
 	Presentation         gatewayview.Status       `json:"presentation"`
 	SchemaVersion        int                      `json:"schema_version"`
 	Revision             string                   `json:"revision"`
@@ -427,6 +428,12 @@ type SourceImportRequest struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 	URL  string `json:"url"`
+	ID   string `json:"-"`
+}
+
+type SourceUpdateRequest struct {
+	Name *string `json:"name"`
+	URL  *string `json:"url"`
 }
 
 type ProfileOverlayResponse struct {
