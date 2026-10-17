@@ -27,10 +27,17 @@ const (
 	sourceUserAgent = "clash.meta"
 )
 
-func (s *Server) importURL(ctx context.Context, req SourceImportRequest) (Source, error) {
-	parsed, err := url.Parse(req.URL)
+func parseHTTPSSourceURL(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return Source{}, fmt.Errorf("source URL must be an absolute HTTPS URL")
+		return nil, fmt.Errorf("source URL must be an absolute HTTPS URL")
+	}
+	return parsed, nil
+}
+
+func (s *Server) importURL(ctx context.Context, req SourceImportRequest) (Source, error) {
+	if _, err := parseHTTPSSourceURL(req.URL); err != nil {
+		return Source{}, err
 	}
 	client := &http.Client{
 		Timeout: 15 * time.Second,
@@ -58,7 +65,7 @@ func (s *Server) importURL(ctx context.Context, req SourceImportRequest) (Source
 		return Source{}, fmt.Errorf("source returned %s", resp.Status)
 	}
 	before, _ := s.store.Sources()
-	source, err := s.importReader(req.Name, req.Kind, redactURL(req.URL), io.LimitReader(resp.Body, maxSourceSize+1))
+	source, err := s.importReaderID(req.ID, req.Name, req.Kind, redactURL(req.URL), io.LimitReader(resp.Body, maxSourceSize+1))
 	if err != nil {
 		return Source{}, err
 	}
@@ -112,6 +119,10 @@ func redactURL(value string) string {
 }
 
 func (s *Server) importReader(name, kind, origin string, reader io.Reader) (Source, error) {
+	return s.importReaderID("", name, kind, origin, reader)
+}
+
+func (s *Server) importReaderID(id, name, kind, origin string, reader io.Reader) (Source, error) {
 	if strings.TrimSpace(name) == "" {
 		name = "Imported profile"
 	}
@@ -139,8 +150,12 @@ func (s *Server) importReader(name, kind, origin string, reader io.Reader) (Sour
 	}
 	digestBytes := sha256.Sum256(data)
 	digest := hex.EncodeToString(digestBytes[:])
-	idBytes := sha256.Sum256([]byte(name + "\x00" + origin))
-	id := hex.EncodeToString(idBytes[:8])
+	if id == "" {
+		idBytes := sha256.Sum256([]byte(name + "\x00" + origin))
+		id = hex.EncodeToString(idBytes[:8])
+	} else if !validHexValue(id, 16) {
+		return Source{}, fmt.Errorf("source id is invalid")
+	}
 	dir := filepath.Join(s.store.Dir(), "sources", id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return Source{}, err
@@ -399,4 +414,103 @@ func mappingKeys(node *yaml.Node) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func (s *Server) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !validHexValue(id, 16) {
+		writeError(w, http.StatusBadRequest, "invalid_source_id", "invalid source id")
+		return
+	}
+	var req SourceUpdateRequest
+	if err := decodeJSON(r, &req, 64<<10); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if req.Name == nil && req.URL == nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "name or url is required")
+		return
+	}
+	sources, err := s.store.Sources()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "sources_failed", err.Error())
+		return
+	}
+	index := -1
+	for i := range sources {
+		if sources[i].ID == id {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		writeError(w, http.StatusNotFound, "source_not_found", fmt.Sprintf("source %q not found", id))
+		return
+	}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "source name is required")
+			return
+		}
+		if len(name) > 128 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "source name exceeds 128 characters")
+			return
+		}
+		sources[index].Name = name
+	}
+	if req.URL != nil {
+		raw := strings.TrimSpace(*req.URL)
+		if _, err := parseHTTPSSourceURL(raw); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		if err := s.credentials.Put(r.Context(), id, raw); err != nil {
+			writeError(w, http.StatusInternalServerError, "source_credential_failed", err.Error())
+			return
+		}
+		sources[index].Origin = redactURL(raw)
+	}
+	if err := s.store.SaveSources(sources); err != nil {
+		writeError(w, http.StatusInternalServerError, "sources_failed", err.Error())
+		return
+	}
+	updated := s.decorateSourceStates([]Source{sources[index]})[0]
+	updated.SnapshotPath = ""
+	updated.FetchURL = ""
+	public := publicSources([]Source{updated}, s.store.Dir())[0]
+	writeJSON(w, http.StatusOK, public)
+}
+
+func (s *Server) handleSourceDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !validHexValue(id, 16) {
+		writeError(w, http.StatusBadRequest, "invalid_source_id", "invalid source id")
+		return
+	}
+	sources, err := s.store.Sources()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "sources_failed", err.Error())
+		return
+	}
+	kept := make([]Source, 0, len(sources))
+	found := false
+	for _, source := range sources {
+		if source.ID == id {
+			found = true
+			continue
+		}
+		kept = append(kept, source)
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "source_not_found", fmt.Sprintf("source %q not found", id))
+		return
+	}
+	if err := s.store.SaveSources(kept); err != nil {
+		writeError(w, http.StatusInternalServerError, "sources_failed", err.Error())
+		return
+	}
+	_ = s.credentials.Delete(r.Context(), id)
+	_ = os.RemoveAll(filepath.Join(s.store.Dir(), "sources", id))
+	w.WriteHeader(http.StatusNoContent)
 }
