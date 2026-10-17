@@ -107,7 +107,7 @@ export const api = {
   restoreMacDHCP: () => request('/api/v1/network/restore-dhcp', { method: 'POST' }),
   validateClient: (clientIPv4: string, ipv6Acknowledged: boolean) => request('/api/v1/recovery/client-validated', { method: 'POST', body: JSON.stringify({ client_ipv4: clientIPv4, gateway_dns_confirmed: true, no_explicit_proxy_confirmed: true, ipv6_bypass_warning_confirmed: ipv6Acknowledged }) }),
   skipClientValidation: () => request('/api/v1/recovery/client-validation-skip', { method: 'POST', body: JSON.stringify({ skip_confirmed: true }) }),
-  sources: () => request<{ revision: string; sources: Source[] }>('/api/v1/sources'),
+  sources: () => request<{ revision: string; sources: Source[]; file_reveal?: boolean }>('/api/v1/sources'),
   importURL: (name: string, url: string) => request<Source>('/api/v1/sources', { method: 'POST', body: JSON.stringify({ name, kind: 'mihomo_profile', url }) }),
   importFile: (file: File) => {
     const data = new FormData()
@@ -117,6 +117,8 @@ export const api = {
     return request<Source>('/api/v1/sources', { method: 'POST', body: data })
   },
   refreshSource: (id: string) => request<Source>(`/api/v1/sources/${id}/refresh`, { method: 'POST' }),
+  updateSource: (id: string, update: { name?: string; url?: string }) => request<Source>(`/api/v1/sources/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(update) }),
+  deleteSource: async (id: string) => { await controlResponse(`/api/v1/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }) },
   applySource: (id: string, revision: string) => trackedRequest<Source>('apply-profile', `/api/v1/sources/${id}/apply`, { method: 'POST', headers: { 'If-Match': `"${revision}"` } }),
   sourceSnapshotLocation: (id: string) => request<SourceSnapshotFile>(`/api/v1/sources/${encodeURIComponent(id)}/snapshot-location`),
   revealSourceSnapshot: (id: string) => request<SourceSnapshotFile>(`/api/v1/sources/${encodeURIComponent(id)}/reveal`, { method: 'POST' }),
@@ -157,10 +159,24 @@ class OperationStatusUnknownError extends Error {
   constructor() { super(operationStatusUnknownMessage); this.name = 'OperationStatusUnknownError' }
 }
 
+// LAN HTTP (http://<NAS-IP>:port) is not a secure context, so randomUUID is
+// missing even though crypto.getRandomValues still works.
+function newOperationID(): string {
+  const webCrypto = globalThis.crypto
+  if (typeof webCrypto?.randomUUID === 'function') return webCrypto.randomUUID()
+  const bytes = new Uint8Array(16)
+  if (typeof webCrypto?.getRandomValues === 'function') webCrypto.getRandomValues(bytes)
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 // Tracking starts before the mutation is acknowledged. The same observer is
 // shared by the page awaiting completion and the global, navigation-safe card.
 async function trackedRequest<T>(kind: string, path: string, init: RequestInit, asynchronous = false): Promise<T> {
-  const id = crypto.randomUUID()
+  const id = newOperationID()
   const now = new Date().toISOString()
   recordOperation({ id, kind, state: 'running', phase: 'submitting', created_at: now, updated_at: now, phase_started_at: now })
   const response = request<T>(path, { ...init, headers: { ...init.headers, [asynchronous ? 'Idempotency-Key' : 'X-OpenSurge-Operation-ID']: id } })
