@@ -870,8 +870,8 @@ describe('OpenSurge app shell', () => {
       unidentified_device_connections: 1, unclassified_connections: 1, unmatched_connections: 5,
     })
     render(<App />)
-    expect(await screen.findByRole('heading', { name: '活跃设备' })).toBeTruthy()
-    expect(screen.getByText('本机 Mac')).toBeTruthy()
+    expect(await screen.findByText('本机 Mac')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '活跃设备' })).toBeTruthy()
     expect(screen.getByText('网关本机 · TUN')).toBeTruthy()
     expect(await screen.findByText('Apple-TV')).toBeTruthy()
     expect(screen.getAllByText('流媒体组 → 美国-02').length).toBeGreaterThan(0)
