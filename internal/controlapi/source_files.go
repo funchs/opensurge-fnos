@@ -11,12 +11,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
 )
 
 const finderRevealTimeout = 5 * time.Second
+
+func sourceFileRevealEnabled() bool {
+	return runtime.GOOS == "darwin"
+}
+
+func defaultRevealInFinder() func(context.Context, string) error {
+	if sourceFileRevealEnabled() {
+		return revealPathInFinder
+	}
+	return func(context.Context, string) error { return nil }
+}
 
 func (s *Server) handleSourceSnapshotLocation(w http.ResponseWriter, r *http.Request) {
 	source, path, ok := s.sourceSnapshotForAction(w, r.PathValue("id"))
