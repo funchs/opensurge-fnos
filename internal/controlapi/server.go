@@ -102,10 +102,11 @@ type Server struct {
 	allowedHosts          map[string]struct{}
 	autostartGateway      bool
 
-	mu          sync.Mutex
-	lifecycleMu sync.Mutex
-	sessions    map[string]time.Time
-	bootstraps  map[string]bootstrapGrant
+	mu            sync.Mutex
+	lifecycleMu   sync.Mutex
+	sessions      map[string]time.Time
+	bootstraps    map[string]bootstrapGrant
+	loginFailures map[string][]time.Time
 }
 
 type bootstrapGrant struct {
@@ -238,7 +239,7 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	if options.RevealInFinder == nil {
-		options.RevealInFinder = revealPathInFinder
+		options.RevealInFinder = defaultRevealInFinder()
 	}
 	return &Server{
 		configPath:            configPath,
@@ -280,6 +281,7 @@ func New(options Options) (*Server, error) {
 		autostartGateway: options.AutostartGateway,
 		sessions:         map[string]time.Time{},
 		bootstraps:       map[string]bootstrapGrant{},
+		loginFailures:    map[string][]time.Time{},
 	}, nil
 }
 
@@ -301,6 +303,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /bootstrap", s.exchangeBootstrap)
 	mux.HandleFunc("GET /enter", s.handleEnter)
 	mux.HandleFunc("POST /api/v1/session/bootstrap", s.handleSessionBootstrap)
+	mux.HandleFunc("GET /api/v1/session/status", s.handleSessionStatus)
+	mux.HandleFunc("POST /api/v1/session/setup", s.handleSessionSetup)
+	mux.HandleFunc("POST /api/v1/session/login", s.handleSessionLogin)
+	mux.HandleFunc("POST /api/v1/session/logout", s.handleSessionLogout)
+	mux.Handle("PUT /api/v1/session/password", s.auth(http.HandlerFunc(s.handleSessionPassword)))
 	mux.Handle("GET /api/v1/overview", s.auth(http.HandlerFunc(s.handleOverview)))
 	mux.Handle("GET /api/v1/config", s.auth(http.HandlerFunc(s.handleControlConfig)))
 	mux.Handle("PUT /api/v1/config", s.auth(http.HandlerFunc(s.handleControlConfig)))
@@ -334,6 +341,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/network/restore-dhcp", s.auth(http.HandlerFunc(s.handleRestoreDHCP)))
 	mux.Handle("GET /api/v1/sources", s.auth(http.HandlerFunc(s.handleSources)))
 	mux.Handle("POST /api/v1/sources", s.auth(http.HandlerFunc(s.handleSources)))
+	mux.Handle("PATCH /api/v1/sources/{id}", s.auth(http.HandlerFunc(s.handleSourceUpdate)))
+	mux.Handle("DELETE /api/v1/sources/{id}", s.auth(http.HandlerFunc(s.handleSourceDelete)))
 	mux.Handle("POST /api/v1/sources/{id}/refresh", s.auth(http.HandlerFunc(s.handleSourceRefresh)))
 	mux.Handle("POST /api/v1/sources/{id}/apply", s.auth(http.HandlerFunc(s.handleSourceApply)))
 	mux.Handle("GET /api/v1/sources/{id}/preview", s.auth(http.HandlerFunc(s.handleSourcePreview)))
@@ -602,11 +611,12 @@ func (s *Server) auth(next http.Handler) http.Handler {
 		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		bearerOK := secureEqual(bearer, s.token)
 		sessionOK := false
+		passwordOK := !s.lanMode() || s.store.GUIPasswordConfigured()
 		if cookie, err := r.Cookie("opensurge_session"); err == nil {
 			now := time.Now()
 			s.mu.Lock()
 			expires, exists := s.sessions[cookie.Value]
-			if exists && now.Before(expires) {
+			if exists && now.Before(expires) && passwordOK {
 				sessionOK = true
 				s.sessions[cookie.Value] = now.Add(webSessionIdleTimeout)
 			} else if exists {
@@ -652,19 +662,51 @@ func (s *Server) handleEnter(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "LAN enter is only available when BaseURL is configured", http.StatusUnauthorized)
 		return
 	}
-	path := allowedWebPath(r.URL.Query().Get("path"))
-	s.issueWebSession(w, r, path)
+	if id := s.webSessionID(r); id != "" && s.store.GUIPasswordConfigured() {
+		path := allowedWebPath(r.URL.Query().Get("path"))
+		now := time.Now()
+		s.mu.Lock()
+		s.sessions[id] = now.Add(webSessionIdleTimeout)
+		s.mu.Unlock()
+		setWebSessionCookie(w, id, now, requestIsHTTPS(r))
+		http.Redirect(w, r, "/"+path, http.StatusFound)
+		return
+	}
+	if !s.store.GUIPasswordConfigured() {
+		http.Redirect(w, r, "/setup", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
-func (s *Server) issueWebSession(w http.ResponseWriter, r *http.Request, path string) {
-	path = allowedWebPath(path)
+func (s *Server) grantWebSession(w http.ResponseWriter, r *http.Request) {
 	session := randomToken(32)
 	now := time.Now()
 	s.mu.Lock()
 	s.sessions[session] = now.Add(webSessionIdleTimeout)
 	s.mu.Unlock()
 	setWebSessionCookie(w, session, now, requestIsHTTPS(r))
+}
+
+func (s *Server) issueWebSession(w http.ResponseWriter, r *http.Request, path string) {
+	path = allowedWebPath(path)
+	s.grantWebSession(w, r)
 	http.Redirect(w, r, "/"+path, http.StatusFound)
+}
+
+func (s *Server) webSessionID(r *http.Request) string {
+	cookie, err := r.Cookie("opensurge_session")
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	expires, exists := s.sessions[cookie.Value]
+	if !exists || !now.Before(expires) {
+		return ""
+	}
+	return cookie.Value
 }
 
 func setWebSessionCookie(w http.ResponseWriter, session string, now time.Time, secure bool) {
@@ -791,6 +833,7 @@ func (s *Server) readOverview(ctx context.Context, inventory bool) (Overview, er
 		warnings = append(warnings, "gateway runtime was interrupted by a system reboot; stop to clean stale state before starting again")
 	}
 	return Overview{
+		Product:              runtimeProduct(),
 		Presentation:         presentation,
 		SchemaVersion:        SchemaVersion,
 		Revision:             revision,
@@ -1760,7 +1803,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		sources = s.decorateSourceStates(sources)
 		revision := fileDigest(s.configPath)
 		w.Header().Set("ETag", `"`+revision+`"`)
-		writeJSON(w, http.StatusOK, map[string]any{"schema_version": SchemaVersion, "revision": revision, "sources": publicSources(sources, s.store.Dir())})
+		writeJSON(w, http.StatusOK, map[string]any{"schema_version": SchemaVersion, "revision": revision, "sources": publicSources(sources, s.store.Dir()), "file_reveal": sourceFileRevealEnabled()})
 		return
 	}
 	var source Source
@@ -1805,7 +1848,7 @@ func (s *Server) handleSourceRefresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "source_not_refreshable", "only HTTPS sources can be refreshed")
 		return
 	}
-	refreshed, err := s.importURL(r.Context(), SourceImportRequest{Name: source.Name, Kind: source.Kind, URL: fetchURL})
+	refreshed, err := s.importURL(r.Context(), SourceImportRequest{ID: source.ID, Name: source.Name, Kind: source.Kind, URL: fetchURL})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "source_refresh_failed", err.Error())
 		return

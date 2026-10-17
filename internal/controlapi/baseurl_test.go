@@ -74,8 +74,8 @@ func TestBaseURLSeparatesListenAddressFromBrowserOrigin(t *testing.T) {
 	}
 }
 
-// /enter 在 LAN 模式（BaseURL 已设）下直接签发 session，让浏览器直连 IP:端口可用。
-func TestEnterIssuesSessionWhenBaseURLSet(t *testing.T) {
+// /enter 在 LAN 模式（BaseURL 已设）下跳到设置或登录，不再无密码签发 session。
+func TestEnterRedirectsToSetupWhenPasswordMissing(t *testing.T) {
 	dir := t.TempDir()
 	server, err := New(Options{
 		ConfigPath: filepath.Join(dir, "config.yaml"),
@@ -95,12 +95,13 @@ func TestEnterIssuesSessionWhenBaseURLSet(t *testing.T) {
 	if recorder.Code != http.StatusFound {
 		t.Fatalf("status = %d, want %d body=%s", recorder.Code, http.StatusFound, recorder.Body.String())
 	}
-	if loc := recorder.Header().Get("Location"); loc != "/dashboard" {
-		t.Fatalf("Location = %q, want /dashboard", loc)
+	if loc := recorder.Header().Get("Location"); loc != "/setup" {
+		t.Fatalf("Location = %q, want /setup", loc)
 	}
-	cookies := recorder.Result().Cookies()
-	if len(cookies) == 0 || cookies[0].Name != "opensurge_session" || cookies[0].Value == "" {
-		t.Fatalf("missing session cookie: %v", cookies)
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == "opensurge_session" && cookie.Value != "" {
+			t.Fatalf("enter issued a session cookie: %v", recorder.Result().Cookies())
+		}
 	}
 }
 
@@ -283,10 +284,20 @@ func TestFnOSConnectHostAllowed(t *testing.T) {
 		if recorder.Code != http.StatusFound {
 			t.Fatalf("host %q status = %d, want 302", host, recorder.Code)
 		}
-		cookies := recorder.Result().Cookies()
-		if len(cookies) == 0 || !cookies[0].Secure {
-			t.Fatalf("host %q cookie Secure not set for HTTPS FN Connect: %v", host, cookies)
-		}
+	}
+	setup := httptest.NewRequest(http.MethodPost, "/api/v1/session/setup", strings.NewReader(`{"password":"long-enough-password"}`))
+	setup.Host = "opensurge.abc123.fnos.net"
+	setup.Header.Set("Origin", "https://opensurge.abc123.fnos.net")
+	setup.Header.Set("Content-Type", "application/json")
+	setup.Header.Set("X-Forwarded-Proto", "https")
+	setupRec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(setupRec, setup)
+	if setupRec.Code != http.StatusNoContent {
+		t.Fatalf("FN Connect setup = %d body=%s", setupRec.Code, setupRec.Body.String())
+	}
+	cookies := setupRec.Result().Cookies()
+	if len(cookies) == 0 || !cookies[0].Secure {
+		t.Fatalf("FN Connect setup cookie Secure not set: %v", cookies)
 	}
 
 	for _, host := range []string{
