@@ -158,10 +158,20 @@ http://<NAS-IP>:61767/enter
 `/enter` 在局域网模式（已配置 BaseURL / `gateway.lan_ip`）下会：
 
 1. 校验浏览器 `Host` 是否允许  
-2. 签发 `opensurge_session` cookie  
-3. 跳转到控制台  
+2. 未设密码 → 跳到设置密码页；已设密码 → 跳到登录页  
+3. 密码正确后签发 `opensurge_session` cookie，再进控制台  
 
-直接打开 `http://<NAS-IP>:61767/` 时，若尚未登录，前端收到 401 会 **自动再跳一次 `/enter`**。  
+**首次打开**必须设置面板密码（只要密码，不要用户名）。之后局域网和 FN Connect 都要登录。
+
+忘记密码：进入容器删除 store 里的 `gui-password` 文件，再打开面板会回到设置页。例如：
+
+```bash
+docker exec -it opensurge rm -f /var/lib/opensurge/store/gui-password
+```
+
+（路径以实际挂载的 store 为准。）已登录可在侧栏快捷设置里改密或退出。
+
+直接打开 `http://<NAS-IP>:61767/` 时，若尚未登录会进入设置或登录页。  
 若仍提示「安全连接已过期」，请检查：
 
 | 检查项 | 说明 |
@@ -220,13 +230,13 @@ OPENSURGE_BASE_URL=https://opensurge.example.com
 ```
 
 原理：读取容器内 `state/store/control-token`，调用  
-`POST /api/v1/session/bootstrap`。日常使用优先 `/enter`，不必每次跑脚本。
+`POST /api/v1/session/bootstrap`。日常使用优先 `/enter` 设密/登录，不必每次跑脚本。
 
 ### 5.4 安全说明
 
-- 61767 在 host 网络上对局域网可见，属于 **内网可信** 模型  
-- **不要**把该端口端口转发到公网（HTTP 明文）  
-- 运维级 `control-token` 在容器卷 `.../state/store/control-token`（权限 0600）
+- 61767 在 host 网络上对局域网可见；浏览器入口还要面板密码  
+- **不要**把该端口明文 HTTP 端口转发到公网  
+- 面板密码哈希在 `.../state/store/gui-password`（0600）；运维级 `control-token` 在 `.../state/store/control-token`（0600）
 
 ---
 
@@ -428,6 +438,6 @@ opensurge_0.1.1_x86.fpk   # tar.gz
 - [ ] 镜像 `v0.1.1` 已 pull 或 docker load  
 - [ ] 向导端口、网卡、**lan_ip = 访问 IP**  
 - [ ] 应用已启动，`docker ps` 可见 `opensurge`  
-- [ ] 浏览器打开 `http://<NAS-IP>:61767/enter` 能进总览  
+- [ ] 浏览器打开 `http://<NAS-IP>:61767/enter` 能进入设置密码或登录，登录后进总览  
 - [ ] 测试设备网关/DNS 已指向 NAS  
 - [ ] 不要把 61767 暴露公网  

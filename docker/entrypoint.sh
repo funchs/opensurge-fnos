@@ -72,7 +72,7 @@ shutdown() {
 }
 trap shutdown TERM INT
 
-echo "Web GUI: $OPENSURGE_BASE_URL/enter （浏览器打开；FN Connect: https://opensurge.<FNID>.fnos.net/ ）"
+echo "Web GUI: $OPENSURGE_BASE_URL/enter （首次设置面板密码，之后登录；FN Connect: https://opensurge.<FNID>.fnos.net/ ）"
 if [ -n "${OPENSURGE_ALLOWED_HOSTS:-}" ]; then
 	echo "Extra allowed hosts: $OPENSURGE_ALLOWED_HOSTS"
 fi

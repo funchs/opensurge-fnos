@@ -31,6 +31,11 @@ Web GUI 从一次性 bootstrap 链接换取的 HttpOnly 会话使用 12 小时�
 与 SSE，并明确引导用户点击 macOS 菜单栏中的 OpenSurge 图标，再选择“在浏览器中打开”；
 不能继续提供必然再次返回 401 的普通“重试”按钮。
 
+fnOS 局域网模式（已配置 BaseURL）另需面板密码：首次打开强制设置，哈希存在
+`{store}/gui-password`（0600，bcrypt）。`GET /enter` 只跳到 `/setup` 或 `/login`，
+不再凭 Host 白名单签发 cookie。Bearer `control-token` 与 30 秒 bootstrap 仍供运维。
+忘记密码：删除该文件后重新设置。macOS 桌面（非 lanMode）不启用面板密码。
+
 菜单栏的 Control API bearer token 只从用户应用支持目录内权限为 `0600` 的
 `control-token` 读取，不复制到 Keychain，也不回退到可能过期的旧 Keychain 副本。文件
 缺失与 endpoint 尚未生成都表示用户级 Control Service 尚未准备好：先轻量 kickstart 并

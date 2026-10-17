@@ -84,8 +84,8 @@ cd /vol1/docker/opensurge
 http://<NAS-IP>:61767/enter
 ```
 
-在 **BaseURL / 局域网模式**下，`/enter` 会校验 Host 后签发 `opensurge_session`
-cookie 并跳到控制台。直接打开 `/` 时，前端若收到 401 会自动再跳一次 `/enter`。
+在 **BaseURL / 局域网模式**下，`/enter` 会校验 Host，然后进入设置密码或登录页；
+密码正确才签发 `opensurge_session`。直接打开 `/` 时同样走设置/登录。
 
 compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 `OPENSURGE_BASE_URL`）与浏览器地址一致，否则 Host 校验失败。
@@ -98,7 +98,8 @@ compose 需监听 `0.0.0.0`，且配置中 `gateway.lan_ip`（或环境变量
 
 ### 安全边界
 
-- **局域网可信**：`/enter` 允许访问该 Host 的设备进入控制台；**不要端口转发到公网**。
+- **局域网 + 面板密码**：Host 白名单之后还要设置/输入面板密码；**不要把 61767 明文转发到公网**。
+- 忘记密码：删除 store 里的 `gui-password`，下次打开重新设置。
 - `control-token` 在 `state/store/control-token`（0600），用于运维 bootstrap API。
 - 更严：只绑 `127.0.0.1` + SSH 隧道。
 - **桌面入口**：`ui/config` 使用 `type: url`（浏览器打开，不做飞牛内嵌面板）。
@@ -130,8 +131,8 @@ entrypoint 给 `opensurge-control` 加上 `--autostart-gateway`（可用
 
 ## 排查
 
-**打开 GUI 提示安全连接过期** —— 用 `/enter`；核对 `lan_ip`；`docker pull` 最新
-`v0.1.1` 后重建容器。详见 [FPK-USER-GUIDE.md §9.1](./FPK-USER-GUIDE.md)。
+**打开 GUI 提示安全连接过期** —— 用 `/enter` 进入登录；核对 `lan_ip`；必要时删
+`gui-password` 后重新设置。详见 [FPK-USER-GUIDE.md §5](./FPK-USER-GUIDE.md)。
 
 **`ip_forward` 写入失败** —— compose 里少了 `cap_add: SYS_ADMIN`，或者 fnOS 的 Docker
 版本不允许 remount。容器日志会直接打出提示。

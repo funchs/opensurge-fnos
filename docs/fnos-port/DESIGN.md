@@ -305,8 +305,8 @@ services:
 解法：给 `controlapi.Options` 加可选的 `BaseURL`（浏览器看到的地址），
 **不填时行为和上游完全一致**，填了才放行非 loopback 绑定，并把它的主机名
 加入 Host 白名单。entrypoint 从 `gateway.lan_ip` 推导 BaseURL。
-后续补充 **`GET /enter`**：在 BaseURL / 局域网模式下校验 Host 后签发
-`opensurge_session` cookie 并跳转控制台（日常入口，不必每次 bootstrap）。
+后续补充 **`GET /enter`**：在 BaseURL / 局域网模式下校验 Host 后进入设置密码
+或登录页，通过后才签发 `opensurge_session`（日常入口，不必每次 bootstrap）。
 测试见 `internal/controlapi/baseurl_test.go`。用户文档见
 [FPK-USER-GUIDE.md](FPK-USER-GUIDE.md) 与 [DEPLOY.md](DEPLOY.md)。
 
