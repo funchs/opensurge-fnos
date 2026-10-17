@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"unicode/utf8"
@@ -130,5 +131,41 @@ func TestGUIPasswordRejectsTooLong(t *testing.T) {
 	}
 	if err := store.CreateGUIPassword(string(long)); err == nil {
 		t.Fatal("expected too long")
+	}
+}
+
+func TestCreateGUIPasswordAcceptsMoreThan72Bytes(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if err := store.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	password := strings.Repeat("a", 73)
+	if err := store.CreateGUIPassword(password); err != nil {
+		t.Fatal(err)
+	}
+	ok, err := store.PasswordMatches(password)
+	if err != nil || !ok {
+		t.Fatalf("match = %v, %v", ok, err)
+	}
+}
+
+func TestGUIPasswordConfiguredWhenFileUnusable(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if err := store.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Dir(), "gui-password")
+	if err := os.WriteFile(path, []byte("{not-json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !store.GUIPasswordConfigured() {
+		t.Fatal("existing unusable file must still count as configured")
+	}
+	ok, err := store.PasswordMatches("long-enough-password")
+	if ok || err == nil {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		t.Fatal("unusable file must not look missing")
 	}
 }

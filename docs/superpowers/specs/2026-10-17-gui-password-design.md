@@ -60,8 +60,8 @@ FN Connect 把 GUI 暴露到 `https://opensurge.<fnid>.fnos.net/` 之后，这�
 }
 ```
 
-- `algo` 必须是 `bcrypt`，其它值视为损坏，登录失败（500 内部错误，不提示「密码错误」）。
-- 哈希用 `golang.org/x/crypto/bcrypt`，`bcrypt.DefaultCost`。
+- `algo` 必须是 `bcrypt`，其它值视为损坏，登录失败（500 `password_unusable`，不提示「密码错误」）。
+- 哈希用 `SHA-256(utf8(password))` 再 `bcrypt.GenerateFromPassword`（`DefaultCost`）。先哈希是为了避开 bcrypt 的 72 字节上限，仍允许 8–128 个 Unicode code point。
 - 明文密码长度 8–128 个 Unicode code point；不 trim。
 - 每次 setup / login / `auth()` / 改密都读文件；删除文件无需重启即可变成「未设置」。
 - 首次创建在 `Store` 锁内：若文件已存在则失败（`errGUIPasswordConfigured`），避免双窗口同时 setup。
@@ -94,7 +94,7 @@ FN Connect 把 GUI 暴露到 `https://opensurge.<fnid>.fnos.net/` 之后，这�
 ```
 
 - `gui_password_required`：`lanMode()`。
-- `password_configured`：密码文件存在且可解析。
+- `password_configured`：密码文件存在（`os.Stat` 成功）。损坏 JSON / 非 bcrypt `algo` 仍算已配置，避免把用户送去 `/setup` 再 409；登录返回 500 `password_unusable`。重置方式仍是删除该文件。
 - `authenticated`：当前请求带有未过期 `opensurge_session`。若 `gui_password_required && !password_configured`，即使 cookie 仍在内存表里也返回 `authenticated: false`（文件已删）。
 
 ### `POST /api/v1/session/setup`
@@ -119,6 +119,7 @@ Body：`{ "password": "..." }`
 | --- | --- |
 | 未设密码 | 409 `password_not_configured` |
 | 密码错误 | 401 `invalid_password`，计入限速 |
+| 文件损坏 / 无法校验 | 500 `password_unusable`，不计入限速 |
 | 限速触发 | 429 `too_many_attempts` |
 | 成功 | 签发 session、204，清该 IP 失败计数 |
 
@@ -134,7 +135,10 @@ Body：`{ "password": "..." }`
 
 | 条件 | 结果 |
 | --- | --- |
-| current 不对 | 401 `invalid_password` |
+| 非 lanMode | 401 `authentication_required` |
+| 未设密码 | 409 `password_not_configured` |
+| current 不对 | 401 `invalid_password`（前端不得因此派发 `authenticationRequiredEvent`） |
+| 文件损坏 / 无法校验 | 500 `password_unusable` |
 | next 长度非法 | 400 `invalid_request` |
 | 成功 | 替换哈希、清空**全部**内存 session、给当前响应重发新 session、204 |
 
@@ -181,7 +185,7 @@ Body：`{ "password": "..." }`
 
 **删除** `redirectToEnterOnce()` 对局域网 GUI 的「401 → `/enter` 自动领 cookie」。fnOS 下 401 改为 `location.replace('/login')`（若未配置密码则 `/setup`）。桌面版 401 仍显示现有「安全连接已过期」页。
 
-`api.ts`：`POST /api/v1/session/login` 与 `setup` 的 401 **不得** 派发 `authenticationRequiredEvent`，否则输错密码会跳到过期页。
+`api.ts`：`POST /api/v1/session/login`、`setup`、`PUT /api/v1/session/password` 的 401 **不得** 派发 `authenticationRequiredEvent`，否则输错密码会跳到过期页。setup/login 整页替换（无侧栏），并停掉 overview 轮询与 SSE。
 
 过期文案（仅桌面/非密码流）：局域网提示改为打开 `/login`，链接同步改掉。fnOS 密码流不应再落到该页。
 

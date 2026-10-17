@@ -1,6 +1,7 @@
 package controlapi
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,12 +44,20 @@ func validateGUIPassword(password string) error {
 	return nil
 }
 
+func guiPasswordKey(password string) []byte {
+	sum := sha256.Sum256([]byte(password))
+	return sum[:]
+}
+
 func hashGUIPassword(password string) (guiPasswordRecord, error) {
 	if err := validateGUIPassword(password); err != nil {
 		return guiPasswordRecord{}, err
 	}
-	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword(guiPasswordKey(password), bcrypt.DefaultCost)
 	if err != nil {
+		if errors.Is(err, bcrypt.ErrPasswordTooLong) {
+			return guiPasswordRecord{}, errGUIPasswordInvalid
+		}
 		return guiPasswordRecord{}, err
 	}
 	return guiPasswordRecord{
@@ -112,7 +121,7 @@ func (s *Store) PasswordMatches(password string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(record.Hash), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(record.Hash), guiPasswordKey(password)); err != nil {
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 			return false, nil
 		}
@@ -124,6 +133,6 @@ func (s *Store) PasswordMatches(password string) (bool, error) {
 func (s *Store) GUIPasswordConfigured() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.loadGUIPasswordLocked()
+	_, err := os.Stat(s.guiPasswordPath())
 	return err == nil
 }

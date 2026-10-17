@@ -102,7 +102,7 @@ forwarding 提供原生网关路径。
 - 使用恢复状态机引导局域网 DHCP 接管的启动、客户端验收、停止和网络恢复。
 
 fnOS 部署后，Web GUI 默认在 **`http://<NAS-IP>:61767/enter`**（端口可在安装向导中修改）。
-局域网模式下用 `/enter` 建立会话；不要把控制端口暴露到公网。
+局域网模式下用 `/enter` 设置或登录面板密码；不要把控制端口暴露到公网。
 详见 [飞牛应用中心安装手册](docs/fnos-port/FPK-USER-GUIDE.md) 与 [Docker 部署指南](docs/fnos-port/DEPLOY.md)。
 
 **网关与代理**
@@ -167,7 +167,7 @@ make control-build
 - Compose 手工部署：见 [Docker 部署指南](docs/fnos-port/DEPLOY.md)
 
 控制面默认监听 **`0.0.0.0:61767`**（与安装向导端口一致）。局域网模式通过
-`/enter` 签发浏览器 session；运维级 `control-token` 在数据卷
+`/enter` 进入设置密码或登录；运维级 `control-token` 在数据卷
 `state/store/control-token`。请只在可信内网暴露，不要做端口转发。
 架构与安全边界见 [Web GUI 架构](docs/gui-architecture.zh-CN.md)。
 

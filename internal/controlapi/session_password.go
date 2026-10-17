@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -97,7 +98,15 @@ func (s *Server) handleSessionLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, err := s.store.PasswordMatches(request.Password)
-	if err != nil || !ok {
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusConflict, "password_not_configured", "set a panel password first")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "password_unusable", "panel password file is unusable")
+		return
+	}
+	if !ok {
 		s.recordLoginFailure(key)
 		writeError(w, http.StatusUnauthorized, "invalid_password", "password is incorrect")
 		return
@@ -132,7 +141,15 @@ func (s *Server) handleSessionPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, err := s.store.PasswordMatches(request.Current)
-	if err != nil || !ok {
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusConflict, "password_not_configured", "set a panel password first")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "password_unusable", "panel password file is unusable")
+		return
+	}
+	if !ok {
 		writeError(w, http.StatusUnauthorized, "invalid_password", "password is incorrect")
 		return
 	}

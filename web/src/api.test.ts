@@ -74,6 +74,20 @@ describe('Control API requests', () => {
     window.removeEventListener(authenticationRequiredEvent, listener)
   })
 
+  it('does not announce expiry for a wrong current panel password', async () => {
+    const listener = vi.fn()
+    window.addEventListener(authenticationRequiredEvent, listener)
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      json: async () => ({ error: { code: 'invalid_password', message: 'password is incorrect' } }),
+    })))
+    await expect(api.changeGUIPassword('wrong-current', 'new-password-ok')).rejects.toMatchObject({ status: 401, code: 'invalid_password' })
+    expect(listener).not.toHaveBeenCalled()
+    window.removeEventListener(authenticationRequiredEvent, listener)
+  })
+
   it('uses the policy workspace endpoint for read, selection, and delay tests', async () => {
     const snapshot = { schema_version: 1, mode: 'prepared', revision: 'r', groups: [], health: { schema_version: 1, test_url: '', proxies: [] } }
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => snapshot }))

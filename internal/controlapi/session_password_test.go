@@ -207,6 +207,30 @@ func TestSessionLoginRateLimitUsesForwardedForOnFNConnect(t *testing.T) {
 	}
 }
 
+func TestSessionLoginUnusablePasswordFile(t *testing.T) {
+	server := newLANControl(t)
+	path := filepath.Join(server.store.Dir(), "gui-password")
+	if err := os.WriteFile(path, []byte("{not-json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rec := lanJSON(server, http.MethodGet, "/api/v1/session/status", "", "", "192.168.1.50:9")
+	var status sessionStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.PasswordConfigured {
+		t.Fatalf("corrupt file should still be configured: %+v", status)
+	}
+	rec = lanJSON(server, http.MethodPost, "/api/v1/session/login", lanOrigin, `{"password":"long-enough-password"}`, "192.168.1.50:9")
+	if rec.Code != http.StatusInternalServerError || apiErrorCode(t, rec) != "password_unusable" {
+		t.Fatalf("login = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = lanJSON(server, http.MethodPost, "/api/v1/session/setup", lanOrigin, `{"password":"long-enough-password"}`, "192.168.1.50:9")
+	if rec.Code != http.StatusConflict || apiErrorCode(t, rec) != "password_already_configured" {
+		t.Fatalf("setup = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestEnterRedirectsWithoutGrantingCookie(t *testing.T) {
 	server := newLANControl(t)
 	req := httptest.NewRequest(http.MethodGet, "/enter", nil)

@@ -160,7 +160,10 @@ export function App() {
     }
   }, [beginLanguageRefresh])
 
+  const panelLocked = Boolean(session?.gui_password_required && (!session.password_configured || !session.authenticated))
+
   useEffect(() => {
+    if (!sessionReady || panelLocked || authenticationRequired) return
     let signature = ''
     return subscribeOperations(() => {
       // Beginning/completing an operation invalidates both visible summaries.
@@ -171,7 +174,7 @@ export function App() {
       void refresh()
       if (isDesktop()) void desktopAction('menubar-status', { refresh: true }).catch(() => {})
     })
-  }, [refresh])
+  }, [refresh, sessionReady, panelLocked, authenticationRequired])
 
   useEffect(() => {
     const requireAuthentication = () => {
@@ -184,8 +187,6 @@ export function App() {
     window.addEventListener(authenticationRequiredEvent, requireAuthentication)
     return () => window.removeEventListener(authenticationRequiredEvent, requireAuthentication)
   }, [])
-
-  const panelLocked = Boolean(session?.gui_password_required && (!session.password_configured || !session.authenticated))
 
   useEffect(() => {
     if (authenticationRequired || !sessionReady || panelLocked) return

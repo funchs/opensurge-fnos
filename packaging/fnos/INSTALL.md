@@ -35,7 +35,7 @@
 
 | 现象 | 处理 |
 | --- | --- |
-| 「安全连接已过期」 | 用 `/enter`；检查 `gateway.lan_ip`；`docker pull` 新镜像后重建容器 |
+| 「安全连接已过期」 | 用 `/enter` 进入登录；检查 `gateway.lan_ip`；必要时删除 `gui-password` |
 | 应用中心图标仍旧、桌面已新 | 强刷/无痕；或见手册中的 `fix-appcenter-icons` |
 | 容器反复退出 | `docker logs opensurge`；检查配置与 `ip_forward` |
 
