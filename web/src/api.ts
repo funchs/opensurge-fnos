@@ -8,11 +8,28 @@ export class RequestError extends Error {
 
 export const authenticationRequiredEvent = 'opensurge:authentication-required'
 
-// Polyfill for crypto.randomUUID (Safari < 15.4, Chrome < 92)
-function randomUUID(): string {
-  if (crypto.randomUUID) return crypto.randomUUID()
+// Polyfill for crypto.randomUUID (Safari < 15.4, Chrome < 92, and insecure contexts)
+export function randomUUID(): string {
+  const cryptoObj = typeof globalThis !== 'undefined' && globalThis.crypto
+    ? globalThis.crypto
+    : typeof window !== 'undefined'
+      ? window.crypto
+      : undefined
+
+  if (cryptoObj) {
+    if (typeof cryptoObj.randomUUID === 'function') {
+      return cryptoObj.randomUUID()
+    }
+    if (typeof cryptoObj.getRandomValues === 'function') {
+      return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c: string) => {
+        const n = Number(c)
+        return (n ^ (cryptoObj.getRandomValues(new Uint8Array(1))[0] & (15 >> (n / 4)))).toString(16)
+      })
+    }
+  }
+
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0
+    const r = (Math.random() * 16) | 0
     const v = c === 'x' ? r : (r & 0x3 | 0x8)
     return v.toString(16)
   })

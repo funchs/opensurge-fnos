@@ -133,6 +133,7 @@ type GatewayConfigInput struct {
 	Mode              string `json:"mode"`
 	Interface         string `json:"interface"`
 	LANIP             string `json:"lan_ip"`
+	LANPrefixLen      int    `json:"lan_prefix_len,omitempty"`
 	UpstreamInterface string `json:"upstream_interface"`
 }
 

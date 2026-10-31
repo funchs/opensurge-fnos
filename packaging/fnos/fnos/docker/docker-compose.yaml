@@ -1,6 +1,6 @@
 services:
   opensurge:
-    image: ${DOCKER_MIRROR}ghcr.io/funchs/opensurge-fnos:v${VERSION}
+    image: ${DOCKER_MIRROR}ghcr.io/charklu/opensurge-fnos:v${VERSION}
     container_name: opensurge
     # 旁路由必须走宿主网络：要看得见真实网卡、要能建 TUN、nftables 规则要作用在宿主上。
     # host 网络下 ports: 映射无效，监听端口由 OPENSURGE_ADDR 决定。

@@ -1,11 +1,11 @@
 appname         = opensurge
-version         = 0.1.1
+version         = 0.1.3
 display_name    = OpenSurge
 platform        = x86
-maintainer      = funchs
-maintainer_url  = https://github.com/funchs/opensurge-fnos
-distributor     = funchs
-distributor_url = https://github.com/funchs/opensurge-fnos
+maintainer      = CharkLu
+maintainer_url  = https://github.com/CharkLu/opensurge-fnos
+distributor     = CharkLu
+distributor_url = https://github.com/CharkLu/opensurge-fnos
 desktop_uidir   = ui
 desktop_applaunchname = opensurge.Application
 service_port    = 61767

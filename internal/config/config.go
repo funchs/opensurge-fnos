@@ -33,6 +33,7 @@ type GatewayConfig struct {
 	Mode              string
 	Interface         string
 	LANIP             string
+	LANPrefixLen      int
 	UpstreamInterface string
 }
 
