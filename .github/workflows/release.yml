@@ -1,0 +1,102 @@
+name: Release fnOS Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (without leading v, e.g. 0.1.2)'
+        required: false
+        default: '0.1.2'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-release:
+    name: Build Multi-Arch Docker Image and FPK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version and Repo
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            RAW_VER="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            RAW_VER="${GITHUB_REF#refs/tags/v}"
+          else
+            RAW_VER=$(grep -E '^version[[:space:]]*=' packaging/fnos/fnos/manifest | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')
+          fi
+          # Ensure lowercase repository for GHCR
+          REPO_LOWER=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          echo "VERSION=${RAW_VER}" >> $GITHUB_OUTPUT
+          echo "REPO_LOWER=${REPO_LOWER}" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Multi-Arch Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.REPO_LOWER }}:v${{ steps.meta.outputs.VERSION }}
+            ghcr.io/${{ steps.meta.outputs.REPO_LOWER }}:latest
+
+      - name: Update Version in Manifest
+        run: |
+          VER="${{ steps.meta.outputs.VERSION }}"
+          sed -i "s/^version[[:space:]]*=.*/version         = ${VER}/" packaging/fnos/fnos/manifest
+
+      - name: Build FPK packages
+        run: |
+          cd packaging/fnos
+          chmod +x scripts/*.sh build-fpk.sh
+          ./scripts/build.sh
+          ./build-fpk.sh all
+
+      - name: Create GitHub Release and Upload FPK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.VERSION }}
+          name: OpenSurge for fnOS v${{ steps.meta.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          files: |
+            packaging/fnos/opensurge_*_x86.fpk
+            packaging/fnos/opensurge_*_arm.fpk
+          body: |
+            ### OpenSurge for fnOS v${{ steps.meta.outputs.VERSION }}
+
+            该版本修复了在局域网 HTTP（非安全上下文）访问 Web UI 时报 `crypto.randomUUID is not a function` 并导致操作阻塞的问题。
+
+            #### 安装包下载
+            - **x86_64（Intel / AMD 处理器，如 N100 / N305 等）**：`opensurge_${{ steps.meta.outputs.VERSION }}_x86.fpk`
+            - **ARM64（瑞芯微 RK3588 等飞牛 ARM 机型）**：`opensurge_${{ steps.meta.outputs.VERSION }}_arm.fpk`
+
+            #### 安装方式
+            1. 登录飞牛 NAS Web 桌面。
+            2. 打开 **应用中心** -> 右上角 **手动安装**。
+            3. 上传对应架构的 `.fpk` 文件完成安装。
+            
+            > **提示**：如果是首次从旧版升级，建议在飞牛应用中心先卸载旧版，再上传新版安装，避免浏览器或系统缓存旧图标。
