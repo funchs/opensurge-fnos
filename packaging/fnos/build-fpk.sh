@@ -48,10 +48,12 @@ do
 done
 
 # ICON.PNG 规范为 64x64（安装进度 / 应用中心列表）
-ICON_W=$(magick identify -format '%w' fnos/ICON.PNG 2>/dev/null || echo 0)
-ICON_H=$(magick identify -format '%h' fnos/ICON.PNG 2>/dev/null || echo 0)
-if [ "${ICON_W}" != "64" ] || [ "${ICON_H}" != "64" ]; then
-    echo "Warning: ICON.PNG is ${ICON_W}x${ICON_H}, official size is 64x64" >&2
+if command -v magick >/dev/null 2>&1; then
+    ICON_W=$(magick identify -format '%w' fnos/ICON.PNG 2>/dev/null || echo 0)
+    ICON_H=$(magick identify -format '%h' fnos/ICON.PNG 2>/dev/null || echo 0)
+    if [ "${ICON_W}" != "64" ] || [ "${ICON_H}" != "64" ]; then
+        echo "Warning: ICON.PNG is ${ICON_W}x${ICON_H}, official size is 64x64" >&2
+    fi
 fi
 
 # 计算 app.tgz 的 MD5 校验和
@@ -149,15 +151,20 @@ for PLATFORM in ${PLATFORMS}; do
     )
     rm -rf "${BUILD_DIR}"
 
-    # 校验：包内不得含 AppleDouble，且 ICON 存在
-    if tar tzf "${SCRIPT_DIR}/${FPK_NAME}" | grep -E '(^|/)\._' >/dev/null; then
+    # 校验：避免流式 pipeline 在遇到提前退出的 grep 时触发 SIGPIPE (tar: stdout: write error)
+    FPK_CONTENTS=$(tar tzf "${SCRIPT_DIR}/${FPK_NAME}")
+    if echo "${FPK_CONTENTS}" | grep -E '(^|/)\._' >/dev/null; then
         echo "Error: fpk still contains AppleDouble ._* entries" >&2
         exit 1
     fi
-    tar tzf "${SCRIPT_DIR}/${FPK_NAME}" | grep -qx 'ICON.PNG' \
-        || { echo "Error: ICON.PNG missing or wrong path in fpk" >&2; exit 1; }
-    tar tzf "${SCRIPT_DIR}/${FPK_NAME}" | grep -qx 'ICON_256.PNG' \
-        || { echo "Error: ICON_256.PNG missing or wrong path in fpk" >&2; exit 1; }
+    if ! echo "${FPK_CONTENTS}" | grep -E '(^|/)ICON\.PNG$' >/dev/null; then
+        echo "Error: ICON.PNG missing or wrong path in fpk" >&2
+        exit 1
+    fi
+    if ! echo "${FPK_CONTENTS}" | grep -E '(^|/)ICON_256\.PNG$' >/dev/null; then
+        echo "Error: ICON_256.PNG missing or wrong path in fpk" >&2
+        exit 1
+    fi
 
     echo "✓ Package created: ${FPK_NAME} ($(du -h "${SCRIPT_DIR}/${FPK_NAME}" | cut -f1))"
     BUILT="${BUILT} ${FPK_NAME}"
