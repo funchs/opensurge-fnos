@@ -37,7 +37,7 @@ control-run: control-build
 	./bin/opensurge-control --config examples/config.example.yaml
 
 REPO ?= ghcr.io/charklu/opensurge-fnos
-VERSION ?= 0.1.2
+VERSION ?= 0.1.3
 IMAGE ?= $(REPO):$(VERSION)
 
 docker-build:

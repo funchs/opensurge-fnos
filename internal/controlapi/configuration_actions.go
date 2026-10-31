@@ -231,6 +231,7 @@ func applyControlConfig(configPath, revision string, payload []byte) (string, er
 	cfg.Gateway.Mode = input.Gateway.Mode
 	cfg.Gateway.Interface = input.Gateway.Interface
 	cfg.Gateway.LANIP = input.Gateway.LANIP
+	cfg.Gateway.LANPrefixLen = input.Gateway.LANPrefixLen
 	cfg.Gateway.UpstreamInterface = input.Gateway.UpstreamInterface
 	cfg.DHCP.Enabled = input.DHCP.Enabled
 	cfg.DHCP.RangeStart = input.DHCP.RangeStart

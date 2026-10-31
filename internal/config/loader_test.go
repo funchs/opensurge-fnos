@@ -252,3 +252,27 @@ transparent:
 		t.Fatal("DHCP.Enabled = false")
 	}
 }
+
+func TestLoadSupportsLANPrefixLen(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	configBody := `
+gateway:
+  mode: "same_lan"
+  interface: "eth0"
+  lan_ip: "192.168.1.20"
+  lan_prefix_len: 24
+  upstream_interface: "eth0"
+`
+	if err := os.WriteFile(configPath, []byte(configBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Gateway.LANPrefixLen != 24 {
+		t.Fatalf("Gateway.LANPrefixLen = %d, want 24", cfg.Gateway.LANPrefixLen)
+	}
+}
